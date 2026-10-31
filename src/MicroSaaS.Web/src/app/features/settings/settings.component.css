@@ -1,0 +1,79 @@
+.settings-container {
+  max-width: 820px;
+  margin: 32px auto;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-card {
+  padding: 16px;
+}
+
+.settings-icon {
+  font-size: 36px;
+  width: 36px;
+  height: 36px;
+}
+
+.settings-form,
+.certificate-form {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.file-upload-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px dashed #90caf9;
+  border-radius: 8px;
+  background-color: #f8fbff;
+}
+
+.file-label {
+  font-weight: 500;
+  color: #1976d2;
+  font-size: 0.9rem;
+}
+
+.file-input {
+  font-size: 0.9rem;
+}
+
+.selected-file-name {
+  font-size: 0.85rem;
+  color: #424242;
+}
+
+.actions-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.success-text {
+  color: #2e7d32;
+  font-weight: 500;
+  margin: 4px 0;
+}
+
+.error-text {
+  color: #d32f2f;
+  font-weight: 500;
+  margin: 4px 0;
+}
