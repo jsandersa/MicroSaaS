@@ -160,6 +160,21 @@ public static class DatabaseSeeder
             CREATE INDEX IF NOT EXISTS "IX_Purchases_TenantId" ON "{schemaName}"."Purchases" ("TenantId");
             CREATE INDEX IF NOT EXISTS "IX_Purchases_TenantId_TipoDte_Folio" ON "{schemaName}"."Purchases" ("TenantId", "TipoDte", "Folio");
             CREATE INDEX IF NOT EXISTS "IX_PurchaseItems_PurchaseId" ON "{schemaName}"."PurchaseItems" ("PurchaseId");
+            CREATE TABLE IF NOT EXISTS "{schemaName}"."Products" (
+                "Id" uuid NOT NULL,
+                "TenantId" character varying(64) NOT NULL DEFAULT '',
+                "Sku" character varying(50) NOT NULL,
+                "Name" character varying(150) NOT NULL,
+                "SalePrice" decimal(18,2) NOT NULL DEFAULT 0,
+                "CostPrice" decimal(18,2) NOT NULL DEFAULT 0,
+                "CurrentStock" integer NOT NULL DEFAULT 0,
+                "IsActive" boolean NOT NULL DEFAULT true,
+                CONSTRAINT "PK_Products" PRIMARY KEY ("Id")
+            );
+            ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "TenantId" character varying(64) NOT NULL DEFAULT '';
+            ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "SalePrice" decimal(18,2) NOT NULL DEFAULT 0;
+            ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "CostPrice" decimal(18,2) NOT NULL DEFAULT 0;
+            ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "CurrentStock" integer NOT NULL DEFAULT 0;
             """;
 
         await tenantDb.Database.ExecuteSqlRawAsync(ensureTableSql, cancellationToken);

@@ -6,6 +6,17 @@ namespace MicroSaaS.Infrastructure.Persistence.Configurations;
 
 public class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
+    private readonly TenantDbContext? _context;
+
+    public ProductConfiguration()
+    {
+    }
+
+    public ProductConfiguration(TenantDbContext context)
+    {
+        _context = context;
+    }
+
     public void Configure(EntityTypeBuilder<Product> builder)
     {
         builder.ToTable("Products");
@@ -15,27 +26,47 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Id)
             .ValueGeneratedNever();
 
+        builder.Property(p => p.TenantId)
+            .IsRequired()
+            .HasMaxLength(64);
+
+        builder.HasIndex(p => p.TenantId);
+
+        // Filtro global de consulta para TenantId
+        if (_context is not null)
+        {
+            builder.HasQueryFilter(p => _context.CurrentTenantIdentifier == null || p.TenantId == _context.CurrentTenantIdentifier);
+        }
+        else
+        {
+            builder.HasQueryFilter(p => !string.IsNullOrEmpty(p.TenantId));
+        }
+
         builder.Property(p => p.Sku)
             .IsRequired()
             .HasMaxLength(50);
 
-        builder.HasIndex(p => p.Sku)
+        builder.HasIndex(p => new { p.TenantId, p.Sku })
             .IsUnique();
 
         builder.Property(p => p.Name)
             .IsRequired()
-            .HasMaxLength(200);
+            .HasMaxLength(150);
 
-        builder.Property(p => p.Price)
+        builder.Property(p => p.SalePrice)
             .IsRequired()
             .HasPrecision(18, 2)
             .HasColumnType("decimal(18,2)");
 
-        builder.Property(p => p.Stock)
+        builder.Property(p => p.CostPrice)
+            .IsRequired()
+            .HasPrecision(18, 2)
+            .HasColumnType("decimal(18,2)");
+
+        builder.Property(p => p.CurrentStock)
             .IsRequired();
 
         builder.Property(p => p.IsActive)
             .IsRequired();
     }
 }
-

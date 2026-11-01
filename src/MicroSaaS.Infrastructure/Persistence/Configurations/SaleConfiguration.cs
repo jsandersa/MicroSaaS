@@ -78,6 +78,8 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .WithOne(i => i.Sale)
             .HasForeignKey(i => i.SaleId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Ignore(s => s.DomainEvents);
     }
 }
 

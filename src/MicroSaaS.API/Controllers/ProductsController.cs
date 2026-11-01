@@ -10,7 +10,7 @@ using MicroSaaS.Application.Products.Queries.GetProducts;
 namespace MicroSaaS.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/products")]
 [Authorize]
 public class ProductsController : ControllerBase
 {
@@ -22,7 +22,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<ProductDto>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<ProductDto>>> GetProducts(CancellationToken cancellationToken)
     {
         var products = await _mediator.Send(new GetProductsQuery(), cancellationToken);
         return Ok(products);
@@ -43,12 +43,12 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Guid>> Create(
+    public async Task<IActionResult> Create(
         [FromBody] CreateProductCommand command,
         CancellationToken cancellationToken)
     {
         var productId = await _mediator.Send(command, cancellationToken);
-        return Ok(productId);
+        return Ok(new { Id = productId });
     }
 
     [HttpPut("{id:guid}")]

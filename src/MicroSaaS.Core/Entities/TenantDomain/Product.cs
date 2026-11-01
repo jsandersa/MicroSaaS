@@ -1,80 +1,79 @@
 namespace MicroSaaS.Core.Entities.TenantDomain;
 
 /// <summary>
-/// Representa un producto del inventario dentro del esquema privado de una Pyme (Tenant).
+/// Representa un producto del inventario dentro del esquema privado de un inquilino (Tenant).
 /// </summary>
 public class Product
 {
-    public Guid Id { get; private set; }
-    public string Sku { get; private set; } = string.Empty;
-    public string Name { get; private set; } = string.Empty;
-    public decimal Price { get; private set; }
-    public int Stock { get; private set; }
-    public bool IsActive { get; private set; }
+    public Guid Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string Sku { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public decimal SalePrice { get; set; }
+    public decimal CostPrice { get; set; }
+    public int CurrentStock { get; set; }
+    public bool IsActive { get; set; } = true;
 
-    // Constructor sin parámetros requerido por EF Core
-    private Product() { }
+    public Product()
+    {
+    }
 
     public Product(
+        string tenantId,
         string sku,
         string name,
-        decimal price,
-        int stock)
+        decimal salePrice,
+        decimal costPrice,
+        int currentStock)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sku);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentOutOfRangeException.ThrowIfNegative(price);
-        ArgumentOutOfRangeException.ThrowIfNegative(stock);
+        ArgumentOutOfRangeException.ThrowIfNegative(salePrice);
+        ArgumentOutOfRangeException.ThrowIfNegative(costPrice);
+        ArgumentOutOfRangeException.ThrowIfNegative(currentStock);
 
         Id = Guid.NewGuid();
+        TenantId = tenantId?.Trim() ?? string.Empty;
         Sku = sku.Trim().ToUpperInvariant();
         Name = name.Trim();
-        Price = price;
-        Stock = stock;
+        SalePrice = salePrice;
+        CostPrice = costPrice;
+        CurrentStock = currentStock;
         IsActive = true;
     }
-
-    public static Product Create(
-        string sku,
-        string name,
-        decimal price,
-        int stock) =>
-        new(sku, name, price, stock);
 
     public void Update(
         string sku,
         string name,
-        decimal price,
-        int stock)
+        decimal salePrice,
+        decimal costPrice,
+        int currentStock)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sku);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentOutOfRangeException.ThrowIfNegative(price);
-        ArgumentOutOfRangeException.ThrowIfNegative(stock);
+        ArgumentOutOfRangeException.ThrowIfNegative(salePrice);
+        ArgumentOutOfRangeException.ThrowIfNegative(costPrice);
+        ArgumentOutOfRangeException.ThrowIfNegative(currentStock);
 
         Sku = sku.Trim().ToUpperInvariant();
         Name = name.Trim();
-        Price = price;
-        Stock = stock;
+        SalePrice = salePrice;
+        CostPrice = costPrice;
+        CurrentStock = currentStock;
     }
 
     public void AdjustStock(int quantityDelta)
     {
-        var newStock = Stock + quantityDelta;
+        var newStock = CurrentStock + quantityDelta;
         if (newStock < 0)
+        {
             throw new InvalidOperationException("El stock del producto no puede quedar en negativo.");
+        }
 
-        Stock = newStock;
-    }
-
-    public void UpdatePrice(decimal newPrice)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(newPrice);
-        Price = newPrice;
+        CurrentStock = newStock;
     }
 
     public void Deactivate() => IsActive = false;
 
     public void Activate() => IsActive = true;
 }
-

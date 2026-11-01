@@ -8,6 +8,6 @@ namespace MicroSaaS.Application.Products.Commands.CreateProduct;
 public record CreateProductCommand(
     string Sku,
     string Name,
-    decimal Price,
-    int Stock) : IRequest<Guid>;
-
+    decimal SalePrice,
+    decimal CostPrice,
+    int CurrentStock) : IRequest<Guid>;

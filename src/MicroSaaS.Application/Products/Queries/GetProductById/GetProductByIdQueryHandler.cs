@@ -28,10 +28,9 @@ public class GetProductByIdQueryHandler : IRequestHandler<GetProductByIdQuery, P
                 p.Id,
                 p.Sku,
                 p.Name,
-                p.Price,
-                p.Stock,
-                p.IsActive))
+                p.SalePrice,
+                p.CostPrice,
+                p.CurrentStock))
             .FirstOrDefaultAsync(cancellationToken);
     }
 }
-

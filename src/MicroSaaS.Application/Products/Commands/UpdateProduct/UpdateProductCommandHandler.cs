@@ -29,12 +29,12 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
         product.Update(
             sku: request.Sku,
             name: request.Name,
-            price: request.Price,
-            stock: request.Stock);
+            salePrice: request.SalePrice,
+            costPrice: request.CostPrice,
+            currentStock: request.CurrentStock);
 
         await _context.SaveChangesAsync(cancellationToken);
 
         return true;
     }
 }
-

@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddHttpClient(SiiAuthenticationService.HttpClientName);
 
         services.AddScoped<ITenantProvider, TenantProvider>();
+        services.AddScoped<ITenantProvisioner, TenantProvisioner>();
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<IEncryptionService, SymmetricEncryptionService>();
         services.AddScoped<IDocumentSignatureService, SiiSignatureService>();

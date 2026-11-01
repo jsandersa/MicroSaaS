@@ -3,7 +3,7 @@ using MediatR;
 namespace MicroSaaS.Application.Tenants.Commands.RegisterTenant;
 
 /// <summary>
-/// Comando para registrar un nuevo cliente (Pyme/Tenant), su usuario administrador y su esquema privado.
+/// Comando para el Onboarding (registro) de un nuevo Tenant, su usuario administrador y aprovisionamiento de su esquema privado.
 /// </summary>
 public record RegisterTenantCommand(
     string Rut,
@@ -11,4 +11,4 @@ public record RegisterTenantCommand(
     string BusinessLine,
     string Address,
     string AdminEmail,
-    string AdminPassword) : IRequest<Guid>;
+    string AdminPassword) : IRequest<string>;

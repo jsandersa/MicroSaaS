@@ -485,3 +485,14 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+
+# Angular / Frontend build & cache artifacts
+dist/
+.angular/
+out-tsc/
+.env.*
+*.local
+*.pem
+*.key
+*.crt

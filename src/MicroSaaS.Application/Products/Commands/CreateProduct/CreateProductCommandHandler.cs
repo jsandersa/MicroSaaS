@@ -5,7 +5,8 @@ using MicroSaaS.Infrastructure.Persistence;
 namespace MicroSaaS.Application.Products.Commands.CreateProduct;
 
 /// <summary>
-/// Manejador del comando <see cref="CreateProductCommand"/> que persiste el producto en el esquema del Tenant autenticado.
+/// Manejador del comando <see cref="CreateProductCommand"/> que instancia la entidad <see cref="Product"/>,
+/// le asigna el <c>TenantId</c> del contexto actual y la persiste en el esquema del Tenant autenticado.
 /// </summary>
 public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, Guid>
 {
@@ -18,17 +19,25 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
 
     public async Task<Guid> Handle(CreateProductCommand request, CancellationToken cancellationToken)
     {
-        var product = Product.Create(
-            sku: request.Sku,
-            name: request.Name,
-            price: request.Price,
-            stock: request.Stock);
+        ArgumentNullException.ThrowIfNull(request);
 
-        _context.Products.Add(product);
+        var tenantId = _context.CurrentTenantIdentifier ?? string.Empty;
 
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Sku = request.Sku.Trim().ToUpperInvariant(),
+            Name = request.Name.Trim(),
+            SalePrice = request.SalePrice,
+            CostPrice = request.CostPrice,
+            CurrentStock = request.CurrentStock,
+            IsActive = true
+        };
+
+        await _context.Products.AddAsync(product, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
 
         return product.Id;
     }
 }
-

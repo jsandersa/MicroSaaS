@@ -1,0 +1,47 @@
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using MicroSaaS.Core.Events;
+using MicroSaaS.Infrastructure.Persistence;
+
+namespace MicroSaaS.Application.InventoryUpdates;
+
+/// <summary>
+/// Manejador de <see cref="ProductSoldDomainEvent"/> que descuenta la cantidad vendida
+/// del <c>CurrentStock</c> del producto correspondiente en el inventario del Tenant.
+/// </summary>
+public class ProductSoldEventHandler : INotificationHandler<ProductSoldDomainEvent>
+{
+    private readonly TenantDbContext _context;
+
+    public ProductSoldEventHandler(TenantDbContext context)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
+
+    public async Task Handle(ProductSoldDomainEvent notification, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(notification.Sku) || notification.Quantity <= 0)
+        {
+            return;
+        }
+
+        var normalizedSku = notification.Sku.Trim().ToUpperInvariant();
+        var rawSkuOrName = notification.Sku.Trim();
+
+        var product = await _context.Products
+            .FirstOrDefaultAsync(
+                p => (string.IsNullOrEmpty(notification.TenantId) || p.TenantId == notification.TenantId)
+                     && (p.Sku == normalizedSku || p.Name == rawSkuOrName),
+                cancellationToken);
+
+        if (product is null)
+        {
+            return;
+        }
+
+        product.CurrentStock -= notification.Quantity;
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}
+

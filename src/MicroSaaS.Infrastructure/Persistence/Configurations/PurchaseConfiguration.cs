@@ -78,6 +78,8 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
             .WithOne(i => i.Purchase)
             .HasForeignKey(i => i.PurchaseId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Ignore(p => p.DomainEvents);
     }
 }
 

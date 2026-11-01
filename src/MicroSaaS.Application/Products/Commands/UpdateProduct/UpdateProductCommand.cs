@@ -9,6 +9,6 @@ public record UpdateProductCommand(
     Guid Id,
     string Sku,
     string Name,
-    decimal Price,
-    int Stock) : IRequest<bool>;
-
+    decimal SalePrice,
+    decimal CostPrice,
+    int CurrentStock) : IRequest<bool>;
