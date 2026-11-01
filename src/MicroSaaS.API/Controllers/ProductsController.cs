@@ -11,6 +11,7 @@ namespace MicroSaaS.API.Controllers;
 
 [ApiController]
 [Route("api/products")]
+[Route("api/inventory")]
 [Authorize]
 public class ProductsController : ControllerBase
 {

@@ -18,10 +18,16 @@ export const routes: Routes = [
       import('./features/onboarding/onboarding.component').then((m) => m.OnboardingComponent)
   },
   {
+    path: 'sales',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/sales/sales.component').then((m) => m.SalesComponent)
+  },
+  {
     path: 'inventory',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/inventory/product-list.component').then((m) => m.ProductListComponent)
+      import('./features/inventory/inventory.component').then((m) => m.InventoryComponent)
   },
   {
     path: 'settings',

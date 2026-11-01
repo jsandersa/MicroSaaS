@@ -10,14 +10,14 @@ import { environment } from '../../../environments/environment';
 @Injectable({
   providedIn: 'root'
 })
-export abstract class BaseApiService {
+export class BaseApiService {
   protected readonly http = inject(HttpClient);
   protected readonly baseUrl = environment.apiUrl.replace(/\/+$/, '');
 
   /**
    * Ejecuta una consulta (Query CQRS) mediante HTTP GET hacia el endpoint especificado.
    */
-  protected get<T>(
+  public get<T>(
     endpoint: string,
     params?: HttpParams | Record<string, string | number | boolean | readonly (string | number | boolean)[]>
   ): Observable<T> {
@@ -28,7 +28,7 @@ export abstract class BaseApiService {
   /**
    * Despacha un comando (Command CQRS) mediante HTTP POST hacia el endpoint especificado.
    */
-  protected post<T>(endpoint: string, body: unknown): Observable<T> {
+  public post<T>(endpoint: string, body: unknown): Observable<T> {
     const url = this.buildUrl(endpoint);
     return this.http.post<T>(url, body);
   }
