@@ -157,6 +157,12 @@ namespace MicroSaaS.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal>("CardAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("CashAmount")
+                        .HasColumnType("numeric");
+
                     b.Property<DateTime>("FechaEmision")
                         .HasColumnType("timestamp with time zone");
 
@@ -174,6 +180,9 @@ namespace MicroSaaS.Infrastructure.Migrations
                     b.Property<decimal>("MontoTotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("integer");
 
                     b.Property<string>("RazonSocialCliente")
                         .IsRequired()

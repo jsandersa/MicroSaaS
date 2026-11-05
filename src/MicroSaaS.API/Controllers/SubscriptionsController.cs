@@ -24,14 +24,19 @@ public class SubscriptionsController : ControllerBase
         [FromBody] PaySubscriptionCommand? command,
         CancellationToken cancellationToken)
     {
-        Guid? tenantId = command?.TenantId;
+        // 1. IGNORAR el ID del body por seguridad y extraerlo directamente del Token JWT
+        var tenantIdClaim = User.FindFirstValue(JwtProvider.TenantIdClaimName);
 
-        if ((!tenantId.HasValue || tenantId.Value == Guid.Empty) &&
-            Guid.TryParse(User.FindFirstValue(JwtProvider.TenantIdClaimName), out var claimTenantId))
+        if (!Guid.TryParse(tenantIdClaim, out var tenantId) || tenantId == Guid.Empty)
         {
-            tenantId = claimTenantId;
+            return Unauthorized(new
+            {
+                error = "Unauthorized",
+                message = "No se pudo identificar el Tenant desde el token de sesión."
+            });
         }
 
+        // 2. Despachar a MediatR con el TenantId 100% verificado y seguro
         var nextDueDate = await _mediator.Send(new PaySubscriptionCommand(tenantId), cancellationToken);
 
         return Ok(new
@@ -41,4 +46,3 @@ public class SubscriptionsController : ControllerBase
         });
     }
 }
-

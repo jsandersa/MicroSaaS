@@ -1,0 +1,175 @@
+<div class="pos-wrapper">
+    <header class="pos-header">
+        <div>
+            <h1>Punto de Venta (POS)</h1>
+            <p class="subtitle">Búsqueda rápida de inventario y emisión de ventas con IVA (19%)</p>
+        </div>
+        <div class="pos-stats">
+            <span class="badge-items">{{ totalItemsCount() }} unidades en carrito</span>
+        </div>
+    </header>
+
+    @if (successMessage()) {
+    <div class="alert alert-success" role="status">
+        <span>{{ successMessage() }}</span>
+        <button type="button" class="alert-close" (click)="successMessage.set(null)">×</button>
+    </div>
+    }
+
+    @if (errorMessage()) {
+    <div class="alert alert-error" role="alert">
+        <span>{{ errorMessage() }}</span>
+        <button type="button" class="alert-close" (click)="errorMessage.set(null)">×</button>
+    </div>
+    }
+
+    <div class="pos-grid">
+        <!-- Columna Izquierda: Buscador y Catálogo de Productos -->
+        <section class="catalog-panel card">
+            <div class="search-header">
+                <h2>Catálogo de Productos</h2>
+                <div class="search-box">
+                    <input type="text" [formControl]="searchControl" placeholder="Buscar por nombre o código SKU..."
+                        aria-label="Buscar productos" />
+                    @if (isSearching()) {
+                    <span class="search-spinner" aria-hidden="true"></span>
+                    }
+                </div>
+            </div>
+
+            <div class="products-list">
+                @if (products().length === 0 && !isSearching()) {
+                <div class="empty-state">
+                    <p>No se encontraron productos para "{{ searchControl.value }}".</p>
+                </div>
+                } @else {
+                @for (product of products(); track product.id) {
+                <article class="product-card" [class.out-of-stock]="product.stock <= 0">
+                    <div class="product-info">
+                        <span class="product-sku">{{ product.sku }}</span>
+                        <h3 class="product-name">{{ product.name }}</h3>
+                        <span class="product-stock" [class.low-stock]="product.stock > 0 && product.stock <= 5">
+                            Stock disponible: {{ product.stock }}
+                        </span>
+                    </div>
+                    <div class="product-actions">
+                        <span class="product-price">${{ product.price | number: '1.0-0' }}</span>
+                        <button type="button" class="btn-add"
+                            [disabled]="product.stock <= 0 || getQuantityInCart(product.id) >= product.stock"
+                            (click)="addToCart(product)">
+                            @if (product.stock <= 0) { Sin Stock } @else if (getQuantityInCart(product.id)>=
+                                product.stock) {
+                                Máx. Stock
+                                } @else {
+                                + Agregar
+                                }
+                        </button>
+                    </div>
+                </article>
+                }
+                }
+            </div>
+        </section>
+
+        <!-- Columna Derecha: Carrito de Compras y Checkout -->
+        <section class="cart-panel card">
+            <div class="cart-header">
+                <h2>Carrito de Venta</h2>
+                @if (cart().length > 0) {
+                <button type="button" class="btn-clear" [disabled]="isProcessing()" (click)="clearCart()">
+                    Vaciar carrito
+                </button>
+                }
+            </div>
+
+            <div class="cart-items">
+                @if (cart().length === 0) {
+                <div class="empty-cart">
+                    <p>El carrito está vacío.</p>
+                    <small>Selecciona productos del catálogo izquierdo para comenzar la venta.</small>
+                </div>
+                } @else {
+                @for (item of cart(); track item.product.id) {
+                <div class="cart-item">
+                    <div class="cart-item-info">
+                        <strong>{{ item.product.name }}</strong>
+                        <small>{{ item.product.sku }} · ${{ item.product.price | number: '1.0-0' }} c/u</small>
+                    </div>
+
+                    <div class="cart-item-controls">
+                        <button type="button" class="qty-btn" [disabled]="isProcessing()"
+                            (click)="decrementQuantity(item.product.id)" aria-label="Disminuir cantidad">
+                            −
+                        </button>
+                        <span class="qty-value">{{ item.quantity }}</span>
+                        <button type="button" class="qty-btn"
+                            [disabled]="isProcessing() || item.quantity >= item.product.stock"
+                            (click)="addToCart(item.product)" aria-label="Aumentar cantidad">
+                            +
+                        </button>
+                    </div>
+
+                    <div class="cart-item-subtotal">
+                        <span>${{ item.subtotal | number: '1.0-0' }}</span>
+                        <button type="button" class="btn-remove" [disabled]="isProcessing()"
+                            (click)="removeFromCart(item.product.id)" title="Eliminar producto">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                }
+                }
+            </div>
+
+            <div class="checkout-section">
+                <div class="customer-field">
+                    <label for="customerRut">RUT Cliente</label>
+                    <input id="customerRut" type="text" [formControl]="customerRutControl"
+                        placeholder="Ej: 12.345.678-5"
+                        [class.invalid]="customerRutControl.invalid && customerRutControl.touched" />
+                    @if (customerRutControl.invalid && customerRutControl.touched) {
+                    <small class="field-error">
+                        @if (customerRutControl.errors?.['required']) {
+                        El RUT del cliente es obligatorio.
+                        } @else if (customerRutControl.errors?.['invalidRut']) {
+                        El RUT ingresado no es válido (Módulo 11).
+                        }
+                    </small>
+                    }
+                </div>
+
+                <div class="totals-box">
+                    <div class="total-row">
+                        <span>Subtotal Neto</span>
+                        <span>${{ subtotalGeneral() | number: '1.0-0' }}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>IVA (19%)</span>
+                        <span>${{ totalIva() | number: '1.0-0' }}</span>
+                    </div>
+                    <div class="total-row total-final">
+                        <span>Total a Pagar</span>
+                        <span>${{ totalFinal() | number: '1.0-0' }}</span>
+                    </div>
+                </div>
+
+                <button type="button" class="btn-checkout" [disabled]="cart().length === 0 || isProcessing()"
+                    (click)="onCheckout()">
+                    @if (isProcessing()) {
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>Procesando venta...</span>
+                    } @else {
+                    <span>Confirmar y Emitir Venta (${{ totalFinal() | number: '1.0-0' }})</span>
+                    }
+                </button>
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Modal de Checkout Inyectado -->
+@if (showCheckoutModal()) {
+<app-checkout-modal [totalAmount]="totalFinal()" (confirm)="processFinalSale($event)"
+    (cancel)="showCheckoutModal.set(false)">
+</app-checkout-modal>
+}

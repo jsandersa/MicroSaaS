@@ -4,7 +4,9 @@ export interface ProductDTO {
   sku: string;
   price: number;
   stock: number;
+  customMarginPercentage: number | null;
 }
+
 
 export interface SaleItem {
   product: ProductDTO;

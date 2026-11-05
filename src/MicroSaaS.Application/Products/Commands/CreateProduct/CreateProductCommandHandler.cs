@@ -31,9 +31,14 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
             Name = request.Name.Trim(),
             SalePrice = request.SalePrice,
             CostPrice = request.CostPrice,
-            CurrentStock = request.CurrentStock,
             IsActive = true
         };
+
+        // Se invoca el comportamiento de dominio para inicializar el stock respetando el encapsulamiento
+        if (request.CurrentStock > 0)
+        {
+            product.AdjustStock(request.CurrentStock);
+        }
 
         await _context.Products.AddAsync(product, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);

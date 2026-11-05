@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, signal, NgZone } from '@angular/core';
 import {
   HubConnection,
   HubConnectionBuilder,
@@ -21,22 +21,16 @@ export interface StockDeductedEvent {
 export class SignalRService {
   private readonly authService = inject(AuthService);
   private readonly tenantService = inject(TenantService);
+  private readonly ngZone = inject(NgZone);
 
   private hubConnection: HubConnection | null = null;
   private readonly stockUpdatedSubject = new Subject<StockDeductedEvent>();
 
-  /**
-   * Observable que emite cada vez que el backend notifica el evento "StockDeducted".
-   */
   readonly onStockUpdated$: Observable<StockDeductedEvent> =
     this.stockUpdatedSubject.asObservable();
 
   readonly isConnected = signal<boolean>(false);
 
-  /**
-   * Inicia la conexión con el Hub de SignalR (/hubs/inventory) inyectando el JWT
-   * y el identificador del Tenant ('X-Tenant-ID').
-   */
   async startConnection(): Promise<void> {
     if (
       this.hubConnection &&
@@ -47,7 +41,11 @@ export class SignalRService {
       return;
     }
 
-    const baseHost = environment.apiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+    // Si environment.apiUrl es '/api' (relativo), forzamos http://localhost:8080
+    // para evitar que NGINX en el puerto 4200 rechace el POST /negotiate con 405 Not Allowed
+    const cleanedUrl = environment.apiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+    const baseHost = cleanedUrl.startsWith('http') ? cleanedUrl : 'http://localhost:8080';
+
     const tenantId = this.tenantService.getTenantId() ?? '';
     const hubUrl = tenantId
       ? `${baseHost}/hubs/inventory?X-Tenant-ID=${encodeURIComponent(tenantId)}`
@@ -59,7 +57,7 @@ export class SignalRService {
         headers: tenantId ? { 'X-Tenant-ID': tenantId } : undefined
       })
       .withAutomaticReconnect()
-      .configureLogging(LogLevel.Warning)
+      .configureLogging(LogLevel.Information)
       .build();
 
     this.registerListeners();
@@ -67,9 +65,10 @@ export class SignalRService {
     try {
       await this.hubConnection.start();
       this.isConnected.set(true);
+      console.log('✅ [SignalRService] Conectado exitosamente a:', hubUrl);
     } catch (err) {
       this.isConnected.set(false);
-      console.warn('[SignalR] No se pudo establecer conexión con /hubs/inventory:', err);
+      console.error('❌ [SignalRService] Error conectando a /hubs/inventory:', err);
     }
   }
 
@@ -90,18 +89,35 @@ export class SignalRService {
       return;
     }
 
-    this.hubConnection.off('StockDeducted');
-    this.hubConnection.on('StockDeducted', (payload: StockDeductedEvent) => {
-      if (payload && typeof payload.productId === 'string' && typeof payload.newStock === 'number') {
-        this.stockUpdatedSubject.next({
-          productId: payload.productId,
-          newStock: payload.newStock
+    const processIncomingStock = (payload: any, arg2?: any) => {
+      console.log('📦 [SignalRService] Evento StockDeducted recibido:', payload, arg2);
+
+      let pId: string | undefined;
+      let nStock: number | undefined;
+
+      if (payload && typeof payload === 'object') {
+        pId = payload.productId ?? payload.ProductId ?? payload.productid;
+        const rawStock = payload.newStock ?? payload.NewStock ?? payload.newstock;
+        nStock = rawStock !== undefined ? Number(rawStock) : undefined;
+      } else if (typeof payload === 'string' && arg2 !== undefined) {
+        pId = payload;
+        nStock = Number(arg2);
+      }
+
+      if (pId && nStock !== undefined && !Number.isNaN(nStock)) {
+        this.ngZone.run(() => {
+          this.stockUpdatedSubject.next({
+            productId: pId!,
+            newStock: nStock!
+          });
         });
       }
-    });
+    };
+
+    this.hubConnection.off('StockDeducted');
+    this.hubConnection.on('StockDeducted', processIncomingStock);
 
     this.hubConnection.onreconnected(() => this.isConnected.set(true));
     this.hubConnection.onclose(() => this.isConnected.set(false));
   }
 }
-

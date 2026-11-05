@@ -26,14 +26,14 @@ export class SalesService {
     const cleanTerm = term.trim();
     return this.api.get<RawProductResponse[]>('/api/products', { search: cleanTerm }).pipe(
       map((items) => {
-        const normalized: ProductDTO[] = (items ?? []).map((item) => ({
+        const normalized: ProductDTO[] = (items ?? []).map((item: any) => ({
           id: item.id,
           name: item.name,
           sku: item.sku,
-          price: item.price ?? item.salePrice ?? 0,
-          stock: item.stock ?? item.currentStock ?? 0
+          price: item.salePrice ?? item.price ?? 0,
+          stock: item.currentStock ?? item.stock ?? 0,
+          customMarginPercentage: item.customMarginPercentage ?? null
         }));
-
         if (!cleanTerm) {
           return normalized;
         }
@@ -51,31 +51,16 @@ export class SalesService {
   /**
    * Envía el comando de creación de venta hacia el backend CQRS.
    */
-  processSale(command: CreateSaleCommand): Observable<{ id: string }> {
-    const subtotalNeto = command.items.reduce((acc, item) => acc + item.subtotal, 0);
-    const iva = Math.round(subtotalNeto * 0.19);
+  processSale(command: any): Observable<{ id: string }> {
+    // El componente ya aplanó los items y calculó los totales (montoNeto, iva, montoTotal).
+    // Solo agregamos los valores por defecto para folio y cliente si vienen vacíos.
     const payload = {
       ...command,
-      folio: Math.floor(Date.now() / 1000) % 1000000,
-      tipoDte: 39,
-      fechaEmision: new Date().toISOString(),
-      rutCliente: command.customerRut || '66.666.666-6',
-      razonSocialCliente: 'Cliente POS',
-      montoNeto: subtotalNeto,
-      iva,
-      montoTotal: command.totalAmount,
-      items: command.items.map((item) => ({
-        ...item,
-        sku: item.product.sku,
-        nombreItem: item.product.name,
-        cantidad: item.quantity,
-        precioUnitario: item.product.price,
-        montoItem: item.subtotal,
-        esExento: false
-      }))
+      folio: command.folio || (Math.floor(Date.now() / 1000) % 1000000),
+      rutCliente: command.rutCliente || '66.666.666-6',
+      razonSocialCliente: command.razonSocialCliente || 'Cliente POS'
     };
 
     return this.api.post<{ id: string }>('/api/sales', payload);
   }
 }
-

@@ -32,19 +32,33 @@ public static class DependencyInjection
 
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
-        // MasterDbContext opera siempre sobre el esquema fijo "public"
-        services.AddDbContext<MasterDbContext>(options =>
+        // MasterDbContext: Seguro usar DbContextPool. Opera siempre sobre "public".
+        // Ahorra RAM al reciclar las instancias de C#
+        services.AddDbContextPool<MasterDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
-        });
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(2),
+                    errorCodesToAdd: null);
+            });
+        }, poolSize: 60);
 
-        // TenantDbContext resuelve dinámicamente el esquema por petición mediante SchemaInterceptor
+        // TenantDbContext: DEBE mantenerse sin Pool (AddDbContext)
+        // Garantiza que el SchemaInterceptor resuelva el Tenant correcto por cada request
         services.AddDbContext<TenantDbContext>((serviceProvider, options) =>
         {
             var schemaInterceptor = serviceProvider.GetRequiredService<SchemaInterceptor>();
 
-            options.UseNpgsql(connectionString)
-                   .AddInterceptors(schemaInterceptor);
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(2),
+                    errorCodesToAdd: null);
+            })
+            .AddInterceptors(schemaInterceptor);
         });
 
         return services;

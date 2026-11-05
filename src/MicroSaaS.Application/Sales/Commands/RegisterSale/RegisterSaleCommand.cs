@@ -20,10 +20,17 @@ public record RegisterSaleCommand(
     int Folio,
     int TipoDte,
     DateTime FechaEmision,
-    string RutCliente,
-    string RazonSocialCliente,
     decimal MontoNeto,
     decimal Iva,
     decimal MontoTotal,
-    IReadOnlyList<SaleItemDto> Items) : IRequest<Guid>;
+    IReadOnlyList<SaleItemDto> Items,
 
+    // Campos opcionales para ventas rápidas o consumidores finales
+    string? RutCliente = null,
+    string? RazonSocialCliente = null,
+
+    // Campos para el control de la caja y Mercado Pago
+    string PaymentMethod = "CASH",
+    decimal CashAmount = 0,
+    decimal CardAmount = 0
+) : IRequest<Guid>;

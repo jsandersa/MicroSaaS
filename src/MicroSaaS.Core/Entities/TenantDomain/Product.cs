@@ -11,7 +11,7 @@ public class Product
     public string Name { get; set; } = string.Empty;
     public decimal SalePrice { get; set; }
     public decimal CostPrice { get; set; }
-    public int CurrentStock { get; set; }
+    public int CurrentStock { get; private set; }
     public bool IsActive { get; set; } = true;
 
     public Product()

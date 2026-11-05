@@ -4,6 +4,13 @@ using MicroSaaS.Core.Events;
 
 namespace MicroSaaS.Core.Entities.TenantDomain;
 
+public enum PaymentMethod
+{
+    Cash,
+    Card,
+    Mixed
+}
+
 /// <summary>
 /// Entidad de dominio que representa un documento de venta emitido por el Tenant (ej. Factura Electrónica Tipo 33).
 /// </summary>
@@ -16,11 +23,19 @@ public class Sale : IHasDomainEvents
     public int Folio { get; set; }
     public int TipoDte { get; set; }
     public DateTime FechaEmision { get; set; }
-    public string RutCliente { get; set; } = string.Empty;
-    public string RazonSocialCliente { get; set; } = string.Empty;
+
+    // RUT y Razón Social ahora son opcionales (nullable) para ventas rápidas
+    public string? RutCliente { get; set; }
+    public string? RazonSocialCliente { get; set; }
+
     public decimal MontoNeto { get; set; }
     public decimal Iva { get; set; }
     public decimal MontoTotal { get; set; }
+
+    // Campos de pago e integración con Mercado Pago
+    public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
+    public decimal CashAmount { get; set; }
+    public decimal CardAmount { get; set; }
 
     public ICollection<SaleItem> Items { get; set; } = new List<SaleItem>();
 

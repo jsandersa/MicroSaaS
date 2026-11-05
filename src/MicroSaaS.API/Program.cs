@@ -1,13 +1,15 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using MicroSaaS.API.Middlewares;
 using MicroSaaS.Application.Common.Seeding;
 using MicroSaaS.Application.Tenants.Commands.RegisterTenant;
+using MicroSaaS.Core.Interfaces;
 using MicroSaaS.Infrastructure;
 using MicroSaaS.Infrastructure.Persistence;
+using MicroSaaS.Infrastructure.RealTime;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,14 +17,15 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddMemoryCache();
 
-// Configuración de CORS para el portal Angular
+// Configuración de CORS compatible con SignalR y WebSockets
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(_ => true)
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
@@ -37,9 +40,11 @@ builder.Services.AddInfrastructure(builder.Configuration);
 var jwtSecretKey = builder.Configuration["JwtSettings:Secret"]
     ?? builder.Configuration["Jwt:SecretKey"]
     ?? "MicroSaaS_SuperSecretKey_For_Development_Min32Chars!";
+
 var jwtIssuer = builder.Configuration["JwtSettings:Issuer"]
     ?? builder.Configuration["Jwt:Issuer"]
     ?? "MicroSaaS.API";
+
 var jwtAudience = builder.Configuration["JwtSettings:Audience"]
     ?? builder.Configuration["Jwt:Audience"]
     ?? "MicroSaaS.Client";
@@ -60,9 +65,30 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
             ClockSkew = TimeSpan.Zero
         };
+
+        // INTEGRACIÓN SIGNALR: Interceptar el token en la URL (Query String)
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/inventory"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
+
+// Registro de SignalR y notificador en tiempo real
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IInventoryNotifier, SignalRInventoryNotifier>();
 
 var app = builder.Build();
 
@@ -78,13 +104,11 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 
-    // 1. Registramos la interfaz gráfica sin invocar propiedades inexistentes
     app.MapScalarApiReference(options =>
     {
         options.Title = "MicroSaaS ERP - SII API";
     });
 
-    // 2. Mapeamos de forma nativa la ruta personalizada para asegurar la resolución
     app.MapGet("/docs", context =>
     {
         context.Response.Redirect("/scalar/v1");
@@ -92,20 +116,18 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-//app.UseHttpsRedirection();
-
+// app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
-
 app.UseAuthentication();
 
-// Middleware de resolución de esquema Multi-Tenant (se ejecuta después de UseAuthentication para leer los Claims del JWT)
+// Middleware de resolución de esquema Multi-Tenant
 app.UseMiddleware<TenantResolutionMiddleware>();
 
-// Middleware de validación de estado y vigencia de la suscripción del Tenant (retorna 402 Payment Required si está vencida/morosa)
+// Middleware de validación de estado y vigencia de la suscripción del Tenant
 app.UseMiddleware<SubscriptionValidationMiddleware>();
 
 app.UseAuthorization();
-
 app.MapControllers();
+app.MapHub<InventoryHub>("/hubs/inventory");
 
 await app.RunAsync();

@@ -1,0 +1,14 @@
+<mat-toolbar color="primary" class="navbar">
+    <span class="brand" routerLink="/">MicroSaaS ERP</span>
+    <span class="spacer"></span>
+
+    @if (authService.isAuthenticated()) {
+    <a mat-button routerLink="/sales" routerLinkActive="active-link">Punto de Venta</a>
+    <a mat-button routerLink="/purchases" routerLinkActive="active-link">Compras</a>
+    <a mat-button routerLink="/inventory" routerLinkActive="active-link">Inventario</a>
+    <a mat-button routerLink="/settings" routerLinkActive="active-link">Configuración</a>
+    <button mat-stroked-button (click)="onLogout()">Cerrar sesión</button>
+    } @else {
+    <a mat-flat-button routerLink="/login">Iniciar sesión</a>
+    }
+</mat-toolbar>

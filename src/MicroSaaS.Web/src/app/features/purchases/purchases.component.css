@@ -1,0 +1,288 @@
+/* purchases.component.css */
+.purchases-container {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+.purchases-container header {
+    margin-bottom: 32px;
+}
+
+.purchases-container h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 4px 0;
+}
+
+.purchases-container p {
+    color: #4b5563;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+/* Alertas */
+.bg-green-100 {
+    background-color: #ecfdf5;
+    color: #065f46;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    border: 1px solid #10b981;
+}
+
+.bg-red-100 {
+    background-color: #fef2f2;
+    color: #991b1b;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    border: 1px solid #ef4444;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Layout Grid */
+.grid {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+@media (min-width: 1024px) {
+    .grid {
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    .lg\:col-span-1 {
+        flex: 1;
+    }
+
+    .lg\:col-span-2 {
+        flex: 2;
+        min-width: 0;
+    }
+}
+
+/* Tarjetas y Contenedores */
+.bg-white {
+    background-color: #ffffff;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e5e7eb;
+}
+
+h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    color: #111827;
+}
+
+/* Formularios */
+label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 6px;
+}
+
+input[type="text"],
+input[type="number"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+}
+
+input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.text-red-500.text-xs {
+    color: #ef4444;
+    font-size: 0.75rem;
+    display: block;
+    margin-top: -8px;
+    margin-bottom: 8px;
+}
+
+/* Buscador Flotante (Dropdown) */
+.relative {
+    position: relative;
+}
+
+.absolute {
+    position: absolute;
+    z-index: 50;
+    width: 100%;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-top: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    padding: 0;
+    list-style: none;
+}
+
+.absolute li {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.absolute li:last-child {
+    border-bottom: none;
+}
+
+.absolute li:hover {
+    background-color: #f8fafc;
+}
+
+.absolute li div.font-medium {
+    font-weight: 500;
+    color: #1f2937;
+}
+
+.absolute li div.text-xs {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+/* Tabla de Detalle */
+.overflow-x-auto {
+    overflow-x: auto;
+    margin-bottom: 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+th {
+    background-color: #f8fafc;
+    padding: 12px 16px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+td {
+    padding: 12px 16px;
+    font-size: 0.875rem;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: middle;
+}
+
+td input[type="number"] {
+    margin-bottom: 0;
+    padding: 6px 8px;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* Botones */
+button {
+    cursor: pointer;
+    border: none;
+    background: transparent;
+}
+
+button.bg-blue-600 {
+    background-color: #2563eb;
+    color: #ffffff;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: background-color 0.2s;
+}
+
+button.bg-blue-600:hover:not(:disabled) {
+    background-color: #1d4ed8;
+}
+
+button.bg-blue-600:disabled {
+    background-color: #94a3b8;
+    cursor: not-allowed;
+}
+
+button.text-red-500 {
+    color: #ef4444;
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+button.text-red-500:hover {
+    background-color: #fee2e2;
+}
+
+/* Totales */
+.max-w-sm {
+    max-width: 320px;
+}
+
+.ml-auto {
+    margin-left: auto;
+}
+
+.flex {
+    display: flex;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.justify-end {
+    justify-content: flex-end;
+}
+
+.mt-8 {
+    margin-top: 32px;
+}
+
+.space-y-2>div {
+    margin-bottom: 8px;
+}
+
+.border-t {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 12px;
+    margin-top: 12px;
+}
+
+.text-lg {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #0f172a;
+}

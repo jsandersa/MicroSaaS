@@ -565,9 +565,16 @@ export class InventoryComponent implements OnInit {
     this.signalRService.onStockUpdated$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((event) => {
+        if (!event || !event.productId) return;
+
+        const targetId = event.productId.toString().trim().toLowerCase();
+        console.log('📦 [InventoryComponent] Recibido update de stock para ID:', targetId, 'Nuevo stock:', event.newStock);
+
         this.inventoryList.update((current) =>
           current.map((p) =>
-            p.id === event.productId ? { ...p, currentStock: event.newStock } : p
+            (p.id && p.id.toString().trim().toLowerCase() === targetId)
+              ? { ...p, currentStock: event.newStock }
+              : p
           )
         );
       });
@@ -676,4 +683,3 @@ export class InventoryComponent implements OnInit {
     });
   }
 }
-

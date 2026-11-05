@@ -1,21 +1,20 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using MicroSaaS.Core.Events;
+using MicroSaaS.Core.Interfaces;
 using MicroSaaS.Infrastructure.Persistence;
 
 namespace MicroSaaS.Application.InventoryUpdates;
 
-/// <summary>
-/// Manejador de <see cref="ProductSoldDomainEvent"/> que descuenta la cantidad vendida
-/// del <c>CurrentStock</c> del producto correspondiente en el inventario del Tenant.
-/// </summary>
 public class ProductSoldEventHandler : INotificationHandler<ProductSoldDomainEvent>
 {
     private readonly TenantDbContext _context;
+    private readonly IInventoryNotifier _notifier;
 
-    public ProductSoldEventHandler(TenantDbContext context)
+    public ProductSoldEventHandler(TenantDbContext context, IInventoryNotifier notifier)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _notifier = notifier ?? throw new ArgumentNullException(nameof(notifier));
     }
 
     public async Task Handle(ProductSoldDomainEvent notification, CancellationToken cancellationToken)
@@ -39,9 +38,11 @@ public class ProductSoldEventHandler : INotificationHandler<ProductSoldDomainEve
             return;
         }
 
-        product.CurrentStock -= notification.Quantity;
+        product.AdjustStock(-notification.Quantity);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Emitimos el evento de actualización en tiempo real una vez persistido el descuento
+        await _notifier.NotifyStockUpdateAsync(product.Id, product.CurrentStock, cancellationToken);
     }
 }
-

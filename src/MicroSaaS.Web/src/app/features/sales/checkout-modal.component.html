@@ -1,0 +1,81 @@
+<div class="modal-backdrop">
+    <div class="modal-content card" (click)="$event.stopPropagation()">
+
+        <header class="modal-header">
+            <h2>Completar Pago</h2>
+            <button class="btn-icon" (click)="close()" [disabled]="status() !== 'IDLE'">✕</button>
+        </header>
+
+        <!-- Vista Principal de Cobro -->
+        @if (status() === 'IDLE' || status() === 'ERROR') {
+        <div class="modal-body">
+            <div class="total-display">
+                <span>Total a Cobrar</span>
+                <span class="amount-huge">\${{ totalAmount | number:'1.0-0' }}</span>
+            </div>
+
+            <div class="payment-methods">
+                <button [class.active]="selectedMethod() === 'CASH'" (click)="selectedMethod.set('CASH')">
+                    💵 Efectivo
+                </button>
+                <button [class.active]="selectedMethod() === 'CARD'" (click)="selectedMethod.set('CARD')">
+                    💳 Tarjeta (MP)
+                </button>
+                <button [class.active]="selectedMethod() === 'MIXED'" (click)="selectedMethod.set('MIXED')">
+                    🔀 Mixto
+                </button>
+            </div>
+
+            <!-- Inputs dinámicos según método -->
+            <div class="payment-details">
+                @if (selectedMethod() === 'CASH' || selectedMethod() === 'MIXED') {
+                <div class="input-group">
+                    <label>Efectivo Recibido</label>
+                    <input type="number" [ngModel]="cashTendered()" (ngModelChange)="onCashTenderedChange($event)"
+                        min="0" class="input-large">
+                </div>
+                }
+
+                @if (selectedMethod() === 'MIXED') {
+                <div class="input-group">
+                    <label>A cobrar en Máquina</label>
+                    <input type="number" [value]="cardTendered()" disabled class="input-large disabled-input">
+                </div>
+                }
+            </div>
+
+            <!-- Resumen de Vuelto -->
+            <div class="summary-box">
+                <div class="summary-row" [class.text-danger]="remainingAmount() > 0">
+                    <span>Faltante:</span>
+                    <span>\${{ remainingAmount() | number:'1.0-0' }}</span>
+                </div>
+                <div class="summary-row text-success">
+                    <span>Vuelto a entregar:</span>
+                    <span class="fw-bold">\${{ changeAmount() | number:'1.0-0' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <footer class="modal-footer">
+            <button class="btn-secondary" (click)="close()">Cancelar</button>
+            <button class="btn-primary btn-large" [disabled]="!isPaymentValid()" (click)="processPayment()">
+                Confirmar Cobro
+            </button>
+        </footer>
+        }
+
+        <!-- Vista de Bloqueo: Integración con Terminal -->
+        @if (status() === 'WAITING_TERMINAL') {
+        <div class="terminal-waiting-state">
+            <div class="spinner-large"></div>
+            <h3>Esperando al terminal...</h3>
+            <p>Pídele al cliente que acerque su tarjeta o dispositivo al lector de Mercado Pago.</p>
+            <div class="terminal-amount">
+                Monto a procesar: \${{ cardTendered() | number:'1.0-0' }}
+            </div>
+        </div>
+        }
+
+    </div>
+</div>

@@ -8,37 +8,8 @@ import { AuthService } from '../../../core/services/auth.service';
   selector: 'app-navbar',
   standalone: true,
   imports: [MatToolbarModule, MatButtonModule, RouterLink, RouterLinkActive],
-  template: `
-    <mat-toolbar color="primary" class="navbar">
-      <span class="brand" routerLink="/">MicroSaaS ERP</span>
-      <span class="spacer"></span>
-      @if (authService.isAuthenticated()) {
-        <a mat-button routerLink="/inventory" routerLinkActive="active-link">Inventario</a>
-        <a mat-button routerLink="/settings" routerLinkActive="active-link">Configuración</a>
-        <button mat-stroked-button (click)="onLogout()">Cerrar sesión</button>
-      } @else {
-        <a mat-flat-button routerLink="/login">Iniciar sesión</a>
-      }
-    </mat-toolbar>
-  `,
-  styles: [`
-    .navbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 24px;
-    }
-    .brand {
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .spacer {
-      flex: 1 1 auto;
-    }
-    .active-link {
-      background: rgba(255, 255, 255, 0.15);
-    }
-  `]
+  templateUrl: './navbar.component.html',
+  styleUrl: './navbar.component.css'
 })
 export class NavbarComponent {
   readonly authService = inject(AuthService);

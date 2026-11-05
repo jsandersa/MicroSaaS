@@ -1,0 +1,19 @@
+.navbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 24px;
+}
+
+.brand {
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.spacer {
+    flex: 1 1 auto;
+}
+
+.active-link {
+    background: rgba(255, 255, 255, 0.15);
+}

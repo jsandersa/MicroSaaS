@@ -20,15 +20,22 @@ public class RegisterSaleCommandHandler : IRequestHandler<RegisterSaleCommand, G
     public async Task<Guid> Handle(RegisterSaleCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.RutCliente);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.RazonSocialCliente);
         ArgumentNullException.ThrowIfNull(request.Items);
+        // Eliminamos las excepciones que forzaban a tener RUT y Razón Social
 
         var fechaEmisionUtc = request.FechaEmision.Kind switch
         {
             DateTimeKind.Utc => request.FechaEmision,
             DateTimeKind.Local => request.FechaEmision.ToUniversalTime(),
             _ => DateTime.SpecifyKind(request.FechaEmision, DateTimeKind.Utc)
+        };
+
+        // Mapeamos el string que llega desde Angular al Enum de C#
+        var mappedPaymentMethod = (request.PaymentMethod?.ToUpperInvariant()) switch
+        {
+            "CARD" => PaymentMethod.Card,
+            "MIXED" => PaymentMethod.Mixed,
+            _ => PaymentMethod.Cash
         };
 
         var sale = new Sale
@@ -38,11 +45,19 @@ public class RegisterSaleCommandHandler : IRequestHandler<RegisterSaleCommand, G
             Folio = request.Folio,
             TipoDte = request.TipoDte,
             FechaEmision = fechaEmisionUtc,
-            RutCliente = request.RutCliente.Trim(),
-            RazonSocialCliente = request.RazonSocialCliente.Trim(),
+
+            // Si llegan vacíos, se guardan como NULL en la base de datos
+            RutCliente = string.IsNullOrWhiteSpace(request.RutCliente) ? null : request.RutCliente.Trim(),
+            RazonSocialCliente = string.IsNullOrWhiteSpace(request.RazonSocialCliente) ? null : request.RazonSocialCliente.Trim(),
+
             MontoNeto = request.MontoNeto,
             Iva = request.Iva,
-            MontoTotal = request.MontoTotal
+            MontoTotal = request.MontoTotal,
+
+            // Asignamos la información del pago
+            PaymentMethod = mappedPaymentMethod,
+            CashAmount = request.CashAmount,
+            CardAmount = request.CardAmount
         };
 
         var lineNumber = 1;
@@ -69,4 +84,3 @@ public class RegisterSaleCommandHandler : IRequestHandler<RegisterSaleCommand, G
         return sale.Id;
     }
 }
-

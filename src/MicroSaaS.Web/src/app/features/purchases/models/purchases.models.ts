@@ -11,6 +11,8 @@ export interface PurchaseItem {
   quantity: number;
   unitCost: number;
   subtotal: number;
+  customMarginPercentage: number | null;
+  price?: number;
 }
 
 export interface CreatePurchaseCommand {
