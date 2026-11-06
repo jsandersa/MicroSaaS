@@ -28,10 +28,9 @@ public class GetSalesQueryHandler : IRequestHandler<GetSalesQuery, IEnumerable<S
                 s.Id,
                 s.Folio,
                 s.FechaEmision,
-                s.RutCliente,
-                s.RazonSocialCliente,
+                s.RutCliente ?? string.Empty,
+                s.RazonSocialCliente ?? string.Empty,
                 s.MontoTotal))
             .ToListAsync(cancellationToken);
     }
 }
-

@@ -10,7 +10,7 @@ namespace MicroSaaS.Infrastructure.Authentication;
 
 /// <summary>
 /// Implementación de <see cref="IJwtProvider"/> encargada de emitir tokens JWT firmados
-/// con los claims de identidad (<c>sub</c>, <c>tenant_id</c>, <c>email</c>) y el esquema Multi-Tenant (<c>tenant_schema</c>).
+/// con los claims de identidad (<c>sub</c>, <c>tenant_id</c>, <c>email</c>, <c>role</c>) y el esquema Multi-Tenant (<c>tenant_schema</c>).
 /// </summary>
 public class JwtProvider : IJwtProvider
 {
@@ -29,16 +29,22 @@ public class JwtProvider : IJwtProvider
         ArgumentNullException.ThrowIfNull(user);
         ArgumentException.ThrowIfNullOrWhiteSpace(schemaName);
 
-        var secretKey = _configuration["JwtSettings:Secret"]
-            ?? _configuration["Jwt:SecretKey"]
-            ?? "MicroSaaS_SuperSecretKey_For_Development_Min32Chars!";
-        var issuer = _configuration["JwtSettings:Issuer"]
-            ?? _configuration["Jwt:Issuer"]
-            ?? "MicroSaaS.API";
-        var audience = _configuration["JwtSettings:Audience"]
-            ?? _configuration["Jwt:Audience"]
-            ?? "MicroSaaS.Client";
-        var expiryMinutes = int.TryParse(_configuration["JwtSettings:ExpiryMinutes"], out var minutes)
+        var secretKey = FirstNonEmpty(
+            _configuration["JwtSettings:Secret"],
+            _configuration["Jwt:SecretKey"],
+            "MicroSaaS_SuperSecretKey_For_Development_Min32Chars!");
+
+        var issuer = FirstNonEmpty(
+            _configuration["JwtSettings:Issuer"],
+            _configuration["Jwt:Issuer"],
+            "MicroSaaS.API");
+
+        var audience = FirstNonEmpty(
+            _configuration["JwtSettings:Audience"],
+            _configuration["Jwt:Audience"],
+            "MicroSaaS.Client");
+
+        var expiryMinutes = int.TryParse(_configuration["JwtSettings:ExpiryMinutes"], out var minutes) && minutes > 0
             ? minutes
             : 1440;
 
@@ -48,7 +54,9 @@ public class JwtProvider : IJwtProvider
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(TenantIdClaimName, user.TenantId.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
-            new(TenantSchemaClaimName, schemaName)
+            new(TenantSchemaClaimName, schemaName),
+            new("role", "Owner"),
+            new(ClaimTypes.Role, "Owner")
         };
 
         var signingCredentials = new SigningCredentials(
@@ -65,4 +73,7 @@ public class JwtProvider : IJwtProvider
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    private static string FirstNonEmpty(params string?[] candidates) =>
+        candidates.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c))!.Trim();
 }

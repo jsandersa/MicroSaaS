@@ -8,5 +8,5 @@ namespace MicroSaaS.Core.Events;
 public record ProductPurchasedDomainEvent(
     string TenantId,
     string Sku,
-    int Quantity) : INotification;
-
+    int Quantity,
+    decimal UnitCost = 0m) : INotification;

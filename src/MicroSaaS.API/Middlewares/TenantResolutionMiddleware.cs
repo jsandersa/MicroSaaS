@@ -4,11 +4,12 @@ namespace MicroSaaS.API.Middlewares;
 
 /// <summary>
 /// Middleware encargado de resolver el esquema del Tenant actual a partir de los Claims del JWT
-/// o del header HTTP personalizado <c>x-tenant-schema</c> e inyectarlo en <see cref="ITenantProvider"/>.
+/// o de las cabeceras HTTP personalizadas (<c>x-tenant-schema</c> / <c>X-Tenant-ID</c>) e inyectarlo en <see cref="ITenantProvider"/>.
 /// </summary>
 public class TenantResolutionMiddleware
 {
     public const string TenantHeaderName = "x-tenant-schema";
+    public const string TenantIdHeaderName = "X-Tenant-ID";
     public const string TenantClaimType = "tenant_schema";
     public const string TenantIdClaimType = "tenant_id";
 
@@ -30,6 +31,11 @@ public class TenantResolutionMiddleware
         {
             tenantProvider.SetCurrentTenantId(tenantId);
         }
+        else if (context.Request.Headers.TryGetValue(TenantIdHeaderName, out var headerTenantIdValues) &&
+                 Guid.TryParse(headerTenantIdValues.FirstOrDefault(), out var headerTenantId))
+        {
+            tenantProvider.SetCurrentTenantId(headerTenantId);
+        }
 
         // 2. Si no viene en los Claims, intentar resolver desde el header HTTP "x-tenant-schema"
         if (string.IsNullOrWhiteSpace(schema) &&
@@ -46,4 +52,3 @@ public class TenantResolutionMiddleware
         await _next(context);
     }
 }
-

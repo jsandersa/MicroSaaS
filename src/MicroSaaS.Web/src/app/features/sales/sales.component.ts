@@ -1,12 +1,17 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { catchError, debounceTime, distinctUntilChanged, finalize, of, startWith, switchMap, tap } from 'rxjs';
 
 import { rutValidator } from '../../shared/validators/rut.validator';
 import { ProductDTO, SaleItem } from './models/sales.models';
-import { SalesService } from './sales.service';
+import {
+  CashSessionSummary,
+  CloseCashRegisterResult,
+  EmittedDteDto,
+  SalesService
+} from './sales.service';
 import { SignalRService } from '../../core/realtime/signalr.service';
 import { CheckoutModalComponent, PaymentDetails } from './checkout-modal.component';
 
@@ -22,14 +27,28 @@ export class SalesComponent implements OnInit {
   private readonly signalRService = inject(SignalRService);
   private readonly destroyRef = inject(DestroyRef);
 
-  // Controles reactivos
+  // Controles reactivos de POS
   readonly searchControl = new FormControl('', { nonNullable: true });
   readonly customerRutControl = new FormControl('', {
     nonNullable: true,
     validators: [rutValidator]
   });
 
-  // Signals de estado
+  // Controles reactivos de Apertura y Cierre de Caja
+  readonly openingAmountControl = new FormControl<number>(50000, {
+    nonNullable: true,
+    validators: [Validators.required, Validators.min(0)]
+  });
+  readonly actualCashAmountControl = new FormControl<number>(0, {
+    nonNullable: true,
+    validators: [Validators.required, Validators.min(0)]
+  });
+  readonly actualCardAmountControl = new FormControl<number>(0, {
+    nonNullable: true,
+    validators: [Validators.required, Validators.min(0)]
+  });
+
+  // Signals de estado del POS
   readonly products = signal<ProductDTO[]>([]);
   readonly cart = signal<SaleItem[]>([]);
   readonly isSearching = signal<boolean>(false);
@@ -37,6 +56,20 @@ export class SalesComponent implements OnInit {
   readonly showCheckoutModal = signal<boolean>(false);
   readonly successMessage = signal<string | null>(null);
   readonly errorMessage = signal<string | null>(null);
+
+  // Signals de Control de Caja
+  readonly isCashOpen = signal<boolean>(false);
+  readonly currentCashSession = signal<CashSessionSummary | null>(null);
+  readonly showOpenCashModal = signal<boolean>(false);
+  readonly showCloseCashModal = signal<boolean>(false);
+  readonly isCashActionLoading = signal<boolean>(false);
+  readonly closeCashResult = signal<CloseCashRegisterResult | null>(null);
+
+  // Signals de Visor de DTEs Emitidos
+  readonly showDtesModal = signal<boolean>(false);
+  readonly isLoadingDtes = signal<boolean>(false);
+  readonly emittedDtes = signal<EmittedDteDto[]>([]);
+  readonly selectedDte = signal<EmittedDteDto | null>(null);
 
   // Signals computados para totales
   readonly subtotalGeneral = computed(() =>
@@ -49,10 +82,146 @@ export class SalesComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    console.log('🚀 SalesComponent inicializado - versión Payload Actualizado (Safe Map)');
     void this.signalRService.startConnection();
+    this.loadCurrentCashSession();
     this.setupProductSearch();
     this.setupRealTimeInventory();
+  }
+
+  loadCurrentCashSession(): void {
+    this.salesService
+      .getCurrentCashSession()
+      .pipe(
+        catchError(() => of({ isOpen: false, session: null })),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe((res) => {
+        this.isCashOpen.set(res.isOpen);
+        this.currentCashSession.set(res.session);
+      });
+  }
+
+  openDtesModal(): void {
+    this.showDtesModal.set(true);
+    this.isLoadingDtes.set(true);
+
+    this.salesService
+      .getEmittedDtes()
+      .pipe(finalize(() => this.isLoadingDtes.set(false)))
+      .subscribe({
+        next: (list) => {
+          this.emittedDtes.set(list ?? []);
+          this.selectedDte.set(list && list.length > 0 ? list[0] : null);
+        },
+        error: () => {
+          this.emittedDtes.set([]);
+          this.selectedDte.set(null);
+        }
+      });
+  }
+
+  selectDte(dte: EmittedDteDto): void {
+    this.selectedDte.set(dte);
+  }
+
+  closeDtesModal(): void {
+    this.showDtesModal.set(false);
+  }
+
+  closeOpenCashModal(): void {
+    this.showOpenCashModal.set(false);
+  }
+
+  closeCloseCashModal(): void {
+    this.showCloseCashModal.set(false);
+  }
+
+  downloadDteXml(dte: EmittedDteDto): void {
+    if (!dte || !dte.xmlContent) return;
+    const blob = new Blob([dte.xmlContent], { type: 'application/xml;charset=iso-8859-1' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `DTE_T${dte.dteType}_F${dte.folio}.xml`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  openCashModal(): void {
+    this.errorMessage.set(null);
+    this.openingAmountControl.setValue(50000);
+    this.showOpenCashModal.set(true);
+  }
+
+  confirmOpenCashRegister(): void {
+    if (this.openingAmountControl.invalid || this.isCashActionLoading()) {
+      return;
+    }
+
+    this.isCashActionLoading.set(true);
+    this.errorMessage.set(null);
+
+    const openingAmount = Number(this.openingAmountControl.value) || 0;
+
+    this.salesService
+      .openCashRegister(openingAmount)
+      .pipe(finalize(() => this.isCashActionLoading.set(false)))
+      .subscribe({
+        next: () => {
+          this.showOpenCashModal.set(false);
+          this.loadCurrentCashSession();
+          this.successMessage.set(
+            `Sesión de caja abierta exitosamente con fondo inicial de $${openingAmount.toLocaleString('es-CL')}.`
+          );
+        },
+        error: (err) => {
+          this.errorMessage.set(
+            err?.error?.message || err?.message || 'No fue posible abrir la sesión de caja.'
+          );
+        }
+      });
+  }
+
+  openCloseCashModal(): void {
+    this.errorMessage.set(null);
+    this.closeCashResult.set(null);
+    const defaultCash = this.currentCashSession()?.openingAmount ?? 0;
+    this.actualCashAmountControl.setValue(defaultCash);
+    this.actualCardAmountControl.setValue(0);
+    this.showCloseCashModal.set(true);
+  }
+
+  confirmCloseCashRegister(): void {
+    if (
+      this.actualCashAmountControl.invalid ||
+      this.actualCardAmountControl.invalid ||
+      this.isCashActionLoading()
+    ) {
+      return;
+    }
+
+    this.isCashActionLoading.set(true);
+    this.errorMessage.set(null);
+
+    const actualCash = Number(this.actualCashAmountControl.value) || 0;
+    const actualCard = Number(this.actualCardAmountControl.value) || 0;
+
+    this.salesService
+      .closeCashRegister(actualCash, actualCard)
+      .pipe(finalize(() => this.isCashActionLoading.set(false)))
+      .subscribe({
+        next: (result) => {
+          this.closeCashResult.set(result);
+          this.isCashOpen.set(false);
+          this.currentCashSession.set(null);
+          this.successMessage.set('Cierre y arqueo de caja registrado exitosamente.');
+        },
+        error: (err) => {
+          this.errorMessage.set(
+            err?.error?.message || err?.message || 'No fue posible cerrar la sesión de caja.'
+          );
+        }
+      });
   }
 
   private setupProductSearch(): void {
@@ -88,7 +257,7 @@ export class SalesComponent implements OnInit {
 
         this.products.update((current) =>
           current.map((p) =>
-            (p?.id && p.id.toString().trim().toLowerCase() === targetId)
+            p?.id && p.id.toString().trim().toLowerCase() === targetId
               ? { ...p, stock: update.newStock }
               : p
           )
@@ -190,6 +359,12 @@ export class SalesComponent implements OnInit {
   onCheckout(): void {
     if (this.isProcessing() || this.cart().length === 0) return;
 
+    if (!this.isCashOpen()) {
+      this.errorMessage.set('Debes abrir una sesión de caja antes de procesar ventas.');
+      this.openCashModal();
+      return;
+    }
+
     if (this.customerRutControl.value && this.customerRutControl.invalid) {
       this.customerRutControl.markAsTouched();
       this.errorMessage.set('El RUT ingresado no es válido. Corrígelo o déjalo en blanco.');
@@ -219,35 +394,40 @@ export class SalesComponent implements OnInit {
       cashAmount: payment.cashAmount,
       cardAmount: payment.cardAmount,
 
-      // Filtro de seguridad y mapeo seguro de propiedades
       items: this.cart()
-        .filter(item => item && item.product)
-        .map(item => ({
+        .filter((item) => item && item.product)
+        .map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+          unitPrice: item.product.price,
           nombreItem: item.product.name,
           cantidad: item.quantity,
           precioUnitario: item.product.price,
           montoItem: item.subtotal,
           esExento: false,
-          sku: item.product.sku || '' // Fallback por si el SKU viene indefinido
+          sku: item.product.sku || ''
         }))
     };
 
     this.salesService
-      .processSale(command as any)
-      .pipe(finalize(() => {
-        this.isProcessing.set(false);
-        this.showCheckoutModal.set(false);
-      }))
+      .processSale(command)
+      .pipe(
+        finalize(() => {
+          this.isProcessing.set(false);
+          this.showCheckoutModal.set(false);
+        })
+      )
       .subscribe({
         next: () => {
           this.clearCart();
           this.customerRutControl.reset('');
-          this.successMessage.set('¡Venta registrada y emitida exitosamente!');
+          this.loadCurrentCashSession();
+          this.successMessage.set('¡Venta registrada, stock descontado en Kardex y DTE emitido!');
           setTimeout(() => this.successMessage.set(null), 4000);
         },
-        error: (err: Error) => {
+        error: (err) => {
           this.errorMessage.set(
-            err.message || 'Ocurrió un error al procesar la venta. Intenta nuevamente.'
+            err?.error?.message || err?.message || 'Ocurrió un error al procesar la venta. Intenta nuevamente.'
           );
         }
       });

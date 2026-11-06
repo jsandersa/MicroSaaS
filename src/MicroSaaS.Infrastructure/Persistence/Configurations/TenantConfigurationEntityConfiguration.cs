@@ -21,6 +21,12 @@ public class TenantConfigurationEntityConfiguration : IEntityTypeConfiguration<T
             .HasColumnType("decimal(5,2)")
             .HasDefaultValue(19.00m);
 
+        builder.Property(c => c.DefaultMarginPercentage)
+            .IsRequired()
+            .HasPrecision(5, 2)
+            .HasColumnType("decimal(5,2)")
+            .HasDefaultValue(30.00m);
+
         builder.Property(c => c.CurrencyCode)
             .IsRequired()
             .HasMaxLength(3);
@@ -36,6 +42,17 @@ public class TenantConfigurationEntityConfiguration : IEntityTypeConfiguration<T
         builder.Property(c => c.ReceiptFooterText)
             .IsRequired(false)
             .HasMaxLength(500);
+
+        builder.Property(c => c.BusinessActivity)
+            .IsRequired(false)
+            .HasMaxLength(200);
+
+        builder.Property(c => c.CompanyAddress)
+            .IsRequired(false)
+            .HasMaxLength(200);
+
+        builder.Property(c => c.CompanyCommune)
+            .IsRequired(false)
+            .HasMaxLength(100);
     }
 }
-

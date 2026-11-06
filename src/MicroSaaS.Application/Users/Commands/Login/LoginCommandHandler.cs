@@ -29,7 +29,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, string>
 
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
-        // 1. Buscar el usuario por su correo electrónico
         var user = await _context.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
@@ -39,7 +38,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, string>
             throw new UnauthorizedAccessException("Credenciales inválidas.");
         }
 
-        // 2. Obtener el Tenant asociado (permitir emitir el JWT aunque esté inactivo/moroso para que pueda pagar en /billing)
         var tenant = await _context.Tenants
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == user.TenantId, cancellationToken);
@@ -49,22 +47,21 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, string>
             throw new UnauthorizedAccessException("El Tenant asociado al usuario no existe.");
         }
 
-        // 3. Generar y retornar el token JWT incluyendo el claim tenant_schema
         return _jwtProvider.Generate(user, tenant.SchemaName);
     }
 
     private static bool VerifyPassword(string password, string storedHash)
     {
-        // Soporta comparación directa en desarrollo o hash SHA-256 en Base64
-        if (string.Equals(password, storedHash, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(storedHash))
         {
-            return true;
+            return false;
         }
 
         var computedHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(password)));
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(computedHash),
-            Encoding.UTF8.GetBytes(storedHash));
+        var computedBytes = Encoding.UTF8.GetBytes(computedHash);
+        var storedBytes = Encoding.UTF8.GetBytes(storedHash);
+
+        return computedBytes.Length == storedBytes.Length
+               && CryptographicOperations.FixedTimeEquals(computedBytes, storedBytes);
     }
 }
-

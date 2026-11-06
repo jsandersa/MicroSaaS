@@ -35,6 +35,7 @@ public class SubscriptionValidationMiddleware
 
         var currentSchema = tenantProvider.GetCurrentSchema();
         var tenantIdClaim = context.User.FindFirstValue(JwtProvider.TenantIdClaimName);
+        var tenantSchemaClaim = context.User.FindFirstValue(JwtProvider.TenantSchemaClaimName);
 
         // Si la petición pertenece a un Tenant (por esquema resuelto o Claim tenant_id), validar su suscripción
         if ((!string.IsNullOrWhiteSpace(currentSchema) &&
@@ -49,14 +50,38 @@ public class SubscriptionValidationMiddleware
                     .AsNoTracking()
                     .FirstOrDefaultAsync(t => t.Id == tenantId, context.RequestAborted);
             }
-            else
+
+            // Fallback por SchemaName (útil cuando la BD fue recreada y el esquema determinístico t_<rut> se mantiene)
+            if (tenant is null)
             {
-                tenant = await masterDbContext.Tenants
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(t => t.SchemaName == currentSchema, context.RequestAborted);
+                var lookupSchema = !string.IsNullOrWhiteSpace(tenantSchemaClaim)
+                    ? tenantSchemaClaim
+                    : currentSchema;
+
+                if (!string.IsNullOrWhiteSpace(lookupSchema) &&
+                    !string.Equals(lookupSchema, "public", StringComparison.OrdinalIgnoreCase))
+                {
+                    tenant = await masterDbContext.Tenants
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(t => t.SchemaName == lookupSchema, context.RequestAborted);
+                }
             }
 
-            if (tenant is null || !tenant.IsActive)
+            // Si el Tenant no existe en absoluto en la BD maestra, el token JWT es huérfano (401 Unauthorized)
+            if (tenant is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    status = StatusCodes.Status401Unauthorized,
+                    error = "Unauthorized",
+                    message = "La sesión actual pertenece a un Tenant que ya no existe. Inicia sesión nuevamente."
+                });
+                return;
+            }
+
+            if (!tenant.IsActive)
             {
                 await WritePaymentRequiredResponseAsync(
                     context,
@@ -93,7 +118,9 @@ public class SubscriptionValidationMiddleware
         return path.StartsWith("/api/Auth/login", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/Auth", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/Tenant/register", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/api/tenants/register", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/Subscriptions/pay", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/api/Subscriptions/create", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/openapi", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/scalar", StringComparison.OrdinalIgnoreCase);
     }

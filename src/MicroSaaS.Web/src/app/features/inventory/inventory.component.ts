@@ -10,8 +10,13 @@ import {
 } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { SignalRService } from '../../core/realtime/signalr.service';
+import { ConfigService } from '../../core/services/config.service';
 import { InventoryService } from './inventory.service';
-import { CreateProductCommand, ProductInventoryDTO } from './models/inventory.models';
+import {
+  CreateProductCommand,
+  KardexMovementDTO,
+  ProductInventoryDTO
+} from './models/inventory.models';
 
 type CreateProductFormControls = {
   [K in keyof CreateProductCommand]: FormControl<CreateProductCommand[K]>;
@@ -26,8 +31,8 @@ type CreateProductFormControls = {
       <!-- Cabecera Principal -->
       <header class="inventory-header">
         <div>
-          <h1>Gestión de Inventario</h1>
-          <p class="subtitle">Control de catálogo, existencias y alertas de stock crítico</p>
+          <h1>Gestión de Inventario y Kardex</h1>
+          <p class="subtitle">Control de catálogo, existencias, Precio Medio Ponderado (PMP) y libro Kardex</p>
         </div>
 
         <div class="header-actions">
@@ -36,6 +41,13 @@ type CreateProductFormControls = {
               ⚠ {{ criticalStockCount() }} en Stock Crítico
             </span>
           }
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="toggleKardexView()"
+          >
+            {{ isKardexVisible() ? 'Ocultar Libro Kardex' : '📊 Ver Libro Kardex' }}
+          </button>
           <button
             type="button"
             class="btn-primary"
@@ -58,6 +70,67 @@ type CreateProductFormControls = {
           <span>{{ successMessage() }}</span>
           <button type="button" class="alert-close" (click)="successMessage.set(null)">×</button>
         </div>
+      }
+
+      <!-- Panel Libro Kardex -->
+      @if (isKardexVisible()) {
+        <section class="form-panel card" aria-label="Libro Mayor Kardex">
+          <div class="form-panel-header">
+            <h2>📊 Libro Kardex Transaccional (Entradas, Salidas y PMP)</h2>
+            <button type="button" class="btn-icon" (click)="isKardexVisible.set(false)" aria-label="Cerrar">✕</button>
+          </div>
+
+          @if (isLoadingKardex()) {
+            <div class="loading-state">
+              <p>Cargando movimientos del Kardex...</p>
+            </div>
+          } @else if (kardexList().length === 0) {
+            <div class="empty-state">
+              <p>Aún no se registran movimientos en el libro Kardex.</p>
+            </div>
+          } @else {
+            <div class="table-responsive">
+              <table class="inventory-table">
+                <thead>
+                  <tr>
+                    <th>Fecha / Hora</th>
+                    <th>SKU</th>
+                    <th>Producto</th>
+                    <th class="text-center">Tipo Movimiento</th>
+                    <th>Justificativo / Glosa Auditoría</th>
+                    <th class="text-center">Cantidad</th>
+                    <th class="text-right">Costo Unit. Mov.</th>
+                    <th class="text-right">Valor Total</th>
+                    <th class="text-right">Costo PMP Actual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (mov of kardexList(); track mov.id) {
+                    <tr>
+                      <td class="muted-cell">{{ mov.transactionDate | date: 'dd/MM/yyyy HH:mm:ss' }}</td>
+                      <td class="sku-cell">{{ mov.productSku }}</td>
+                      <td class="name-cell">{{ mov.productName }}</td>
+                      <td class="text-center">
+                        @if (mov.movementType === 1) {
+                          <span class="badge badge-optimal">🟢 {{ mov.movementTypeName }}</span>
+                        } @else if (mov.movementType === 2) {
+                          <span class="badge badge-critical">🔴 {{ mov.movementTypeName }}</span>
+                        } @else {
+                          <span class="category-pill">🔵 {{ mov.movementTypeName }}</span>
+                        }
+                      </td>
+                      <td class="muted-cell">{{ mov.reason || '-' }}</td>
+                      <td class="text-center stock-number">{{ mov.quantity }}</td>
+                      <td class="text-right">\${{ mov.unitCost | number: '1.0-0' }}</td>
+                      <td class="text-right price-cell">\${{ mov.totalValue | number: '1.0-0' }}</td>
+                      <td class="text-right">\${{ mov.currentPmpCost | number: '1.0-0' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
       }
 
       <!-- Panel Expandible / Formulario Reactivo -->
@@ -119,6 +192,7 @@ type CreateProductFormControls = {
                   type="number"
                   formControlName="price"
                   min="1"
+                  (focus)="$any($event.target).select()"
                   [class.invalid]="isInvalid('price')"
                 />
                 @if (isInvalid('price')) {
@@ -133,6 +207,7 @@ type CreateProductFormControls = {
                   type="number"
                   formControlName="initialStock"
                   min="0"
+                  (focus)="$any($event.target).select()"
                   [class.invalid]="isInvalid('initialStock')"
                 />
                 @if (isInvalid('initialStock')) {
@@ -147,6 +222,7 @@ type CreateProductFormControls = {
                   type="number"
                   formControlName="minimumStock"
                   min="0"
+                  (focus)="$any($event.target).select()"
                   [class.invalid]="isInvalid('minimumStock')"
                 />
                 @if (isInvalid('minimumStock')) {
@@ -181,6 +257,139 @@ type CreateProductFormControls = {
         </section>
       }
 
+      <!-- Panel de Edición Rápida de Precio Venta y Ajuste Auditado de Stock (Justo encima de la tabla) -->
+      @if (editingProduct()) {
+        <section id="edit-product-panel" class="form-panel card" aria-label="Editar Precio y Ajuste Auditado de Stock">
+          <div class="form-panel-header">
+            <h2>
+              {{ isStockAdjustmentMode() ? '⚖️ Ajuste Auditado de Stock (Kardex):' : '✏️ Editar Precio de Venta POS:' }}
+              {{ editingProduct()!.name }} ({{ editingProduct()!.sku }})
+            </h2>
+            <button type="button" class="btn-icon" (click)="cancelEditProduct()" aria-label="Cerrar">✕</button>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="editPmpCost">🔒 Costo PMP Contable (Solo Lectura)</label>
+              <input
+                id="editPmpCost"
+                type="text"
+                readonly
+                style="background:#f1f5f9;color:#475569;cursor:not-allowed;font-weight:700;"
+                [value]="'$' + (editingProduct()!.pmpCost | number: '1.0-0') + ' (Calculado por Kardex)'"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="editSalePrice">Precio de Venta POS (CLP)</label>
+              <input
+                id="editSalePrice"
+                type="number"
+                min="1"
+                (focus)="$any($event.target).select()"
+                [formControl]="editSalePriceControl"
+              />
+              @if (suggestedPriceHint()) {
+                <small style="color:#16a34a;font-weight:600;margin-top:0.25rem;">{{ suggestedPriceHint() }}</small>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="editCurrentStock">
+                {{ isStockAdjustmentMode() ? 'Nuevo Stock Físico Contado (Actual: ' + editingProduct()!.currentStock + ' u.)' : '🔒 Stock Actual en Kardex (Protegido)' }}
+              </label>
+              @if (isStockAdjustmentMode()) {
+                <input
+                  id="editCurrentStock"
+                  type="number"
+                  min="0"
+                  (focus)="$any($event.target).select()"
+                  [formControl]="editStockControl"
+                />
+              } @else {
+                <div style="display:flex;gap:0.5rem;align-items:center;">
+                  <input
+                    type="text"
+                    readonly
+                    style="background:#f1f5f9;color:#475569;cursor:not-allowed;font-weight:700;flex:1;"
+                    [value]="editingProduct()!.currentStock + ' unidades'"
+                  />
+                  <button
+                    type="button"
+                    class="btn-secondary"
+                    style="white-space:nowrap;padding:0.6rem 0.85rem;font-size:0.82rem;"
+                    (click)="enableStockAdjustmentMode()"
+                  >
+                    ⚖️ Ajustar por Merma / Conteo
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Bloque obligatorio de Justificativo Kardex cuando se activa el modo de ajuste de stock -->
+          @if (isStockAdjustmentMode()) {
+            <div style="margin-top:1rem;padding:1rem;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+              <p style="margin:0 0 0.75rem;font-size:0.88rem;font-weight:700;color:#92400e;">
+                ⚠ Ajuste Auditado de Inventario ({{ editingProduct()!.currentStock }} u. → {{ editStockControl.value }} u., diferencia: {{ editStockControl.value - editingProduct()!.currentStock > 0 ? '+' : '' }}{{ editStockControl.value - editingProduct()!.currentStock }} u.). Ingresa la causal y glosa obligatoria para el Libro Kardex:
+              </p>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="editReasonCategory">Causal Tributaria / Contable del Ajuste *</label>
+                  <select
+                    id="editReasonCategory"
+                    [formControl]="editReasonCategoryControl"
+                    style="padding:0.65rem 0.8rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.925rem;background:#fff;"
+                  >
+                    <option value="Diferencia en Conteo Físico (Toma de Inventario)">Diferencia en Conteo Físico (Toma de Inventario)</option>
+                    <option value="Merma / Daño o Rotura en Bodega">Merma / Daño o Rotura en Bodega</option>
+                    <option value="Vencimiento / Caducidad de Producto">Vencimiento / Caducidad de Producto</option>
+                    <option value="Extravío / Hurto">Extravío / Hurto</option>
+                    <option value="Muestra Comercial / Consumo Interno">Muestra Comercial / Consumo Interno</option>
+                  </select>
+                </div>
+
+                <div class="form-field">
+                  <label for="editReasonDetail">Glosa / Documento o Motivo de Respaldo (Mín. 5 caracteres) *</label>
+                  <input
+                    id="editReasonDetail"
+                    type="text"
+                    placeholder="Ej: Acta de conteo físico mensual #04 / Envase roto en recepción"
+                    [formControl]="editReasonDetailControl"
+                  />
+                </div>
+              </div>
+            </div>
+          }
+
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              (click)="applySuggestedMargin()"
+            >
+              ⚡ Sugerir Precio Venta (+{{ defaultMarginPercentage() }}% sobre PMP)
+            </button>
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="isSubmitting()"
+              (click)="cancelEditProduct()"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="btn-submit"
+              [disabled]="isSubmitting() || !canSaveEditProduct()"
+              (click)="saveEditProduct()"
+            >
+              {{ isSubmitting() ? 'Guardando...' : 'Guardar Cambios' }}
+            </button>
+          </div>
+        </section>
+      }
+
       <!-- Tabla de Catálogo de Inventario -->
       <section class="table-card card">
         @if (isLoading()) {
@@ -203,21 +412,28 @@ type CreateProductFormControls = {
                   <th>SKU</th>
                   <th>Producto</th>
                   <th>Categoría</th>
+                  <th class="text-right">Costo PMP</th>
                   <th class="text-right">Precio Venta</th>
                   <th class="text-center">Stock Actual</th>
-                  <th class="text-center">Stock Mínimo</th>
                   <th class="text-center">Estado de Stock</th>
+                  <th class="text-center">Acción</th>
                 </tr>
               </thead>
               <tbody>
                 @for (item of inventoryList(); track item.id) {
-                  <tr [class.row-critical]="isCriticalStock(item)">
+                  <tr [class.row-critical]="isCriticalStock(item) || item.price <= item.pmpCost">
                     <td class="sku-cell">{{ item.sku }}</td>
                     <td class="name-cell">{{ item.name }}</td>
                     <td>
                       <span class="category-pill">{{ item.category }}</span>
                     </td>
-                    <td class="text-right price-cell">\${{ item.price | number: '1.0-0' }}</td>
+                    <td class="text-right muted-cell">\${{ item.pmpCost | number: '1.0-0' }}</td>
+                    <td class="text-right price-cell" [class.stock-critical-text]="item.price <= item.pmpCost">
+                      \${{ item.price | number: '1.0-0' }}
+                      @if (item.price <= item.pmpCost) {
+                        <small style="display:block;font-size:0.72rem;color:#dc2626;">⚠ Bajo PMP</small>
+                      }
+                    </td>
                     <td class="text-center">
                       <span
                         class="stock-number"
@@ -226,7 +442,6 @@ type CreateProductFormControls = {
                         {{ item.currentStock }}
                       </span>
                     </td>
-                    <td class="text-center muted-cell">{{ item.minimumStock }}</td>
                     <td class="text-center">
                       @if (isCriticalStock(item)) {
                         <span class="badge badge-critical" role="status">
@@ -237,6 +452,24 @@ type CreateProductFormControls = {
                           ✓ Stock Óptimo
                         </span>
                       }
+                    </td>
+                    <td class="text-center" style="display:flex;gap:0.4rem;justify-content:center;flex-wrap:wrap;">
+                      <button
+                        type="button"
+                        class="btn-secondary"
+                        style="padding:0.35rem 0.7rem;font-size:0.8rem;"
+                        (click)="startEditProduct(item, false)"
+                      >
+                        ✏️ Editar Precio
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-secondary"
+                        style="padding:0.35rem 0.7rem;font-size:0.8rem;"
+                        (click)="startEditProduct(item, true)"
+                      >
+                        ⚖️ Ajustar Stock
+                      </button>
                     </td>
                   </tr>
                 }
@@ -527,17 +760,37 @@ type CreateProductFormControls = {
 })
 export class InventoryComponent implements OnInit {
   private readonly inventoryService = inject(InventoryService);
+  private readonly configService = inject(ConfigService);
   private readonly signalRService = inject(SignalRService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly fb = inject(NonNullableFormBuilder);
 
   // Signals de gestión de estado
   readonly inventoryList = signal<ProductInventoryDTO[]>([]);
+  readonly defaultMarginPercentage = signal<number>(30);
   readonly isLoading = signal<boolean>(true);
   readonly isFormVisible = signal<boolean>(false);
   readonly isSubmitting = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
   readonly successMessage = signal<string | null>(null);
+
+  // Signals de Edición Rápida de Precio y Ajuste Auditado de Stock
+  readonly editingProduct = signal<ProductInventoryDTO | null>(null);
+  readonly isStockAdjustmentMode = signal<boolean>(false);
+  readonly suggestedPriceHint = signal<string | null>(null);
+  readonly editCostControl = new FormControl<number>(0, { nonNullable: true });
+  readonly editSalePriceControl = new FormControl<number>(0, { nonNullable: true });
+  readonly editStockControl = new FormControl<number>(0, { nonNullable: true });
+  readonly editReasonCategoryControl = new FormControl<string>(
+    'Diferencia en Conteo Físico (Toma de Inventario)',
+    { nonNullable: true }
+  );
+  readonly editReasonDetailControl = new FormControl<string>('', { nonNullable: true });
+
+  // Signals de Libro Kardex
+  readonly isKardexVisible = signal<boolean>(false);
+  readonly isLoadingKardex = signal<boolean>(false);
+  readonly kardexList = signal<KardexMovementDTO[]>([]);
 
   // Signal computado para conteo de productos en stock crítico
   readonly criticalStockCount = computed(
@@ -555,8 +808,160 @@ export class InventoryComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.loadTenantMargin();
     this.loadInventory();
     this.setupRealtimeStockUpdates();
+  }
+
+  private loadTenantMargin(): void {
+    this.configService.getConfiguration().subscribe({
+      next: (config) => {
+        if (config && typeof config.defaultMarginPercentage === 'number' && config.defaultMarginPercentage >= 0) {
+          this.defaultMarginPercentage.set(config.defaultMarginPercentage);
+        }
+      },
+      error: () => {
+        // Fallback silencioso a 30%
+      }
+    });
+  }
+
+  startEditProduct(product: ProductInventoryDTO, adjustStockMode = false): void {
+    this.errorMessage.set(null);
+    this.successMessage.set(null);
+    this.suggestedPriceHint.set(null);
+    this.editingProduct.set(product);
+    this.isStockAdjustmentMode.set(adjustStockMode);
+    this.editCostControl.setValue(product.pmpCost);
+    const factor = 1 + this.defaultMarginPercentage() / 100;
+    this.editSalePriceControl.setValue(
+      product.price <= product.pmpCost ? Math.round(product.pmpCost * factor) : product.price
+    );
+    this.editStockControl.setValue(product.currentStock);
+    this.editReasonCategoryControl.setValue('Diferencia en Conteo Físico (Toma de Inventario)');
+    this.editReasonDetailControl.setValue('');
+
+    setTimeout(() => {
+      const panel = document.getElementById('edit-product-panel');
+      panel?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const inputId = adjustStockMode ? 'editCurrentStock' : 'editSalePrice';
+      const inputEl = document.getElementById(inputId) as HTMLInputElement | null;
+      inputEl?.focus();
+      inputEl?.select();
+    }, 50);
+  }
+
+  enableStockAdjustmentMode(): void {
+    this.isStockAdjustmentMode.set(true);
+    setTimeout(() => {
+      const stockInput = document.getElementById('editCurrentStock') as HTMLInputElement | null;
+      stockInput?.focus();
+      stockInput?.select();
+    }, 50);
+  }
+
+  canSaveEditProduct(): boolean {
+    const target = this.editingProduct();
+    if (!target) return false;
+    const newStock = Number(this.editStockControl.value);
+    if (newStock !== target.currentStock) {
+      return (this.editReasonDetailControl.value ?? '').trim().length >= 5;
+    }
+    return true;
+  }
+
+  applySuggestedMargin(): void {
+    const target = this.editingProduct();
+    const pmp = target ? target.pmpCost : Number(this.editCostControl.value) || 0;
+    const factor = 1 + this.defaultMarginPercentage() / 100;
+    const suggested = Math.round(pmp * factor);
+    this.editSalePriceControl.setValue(suggested);
+    this.suggestedPriceHint.set(
+      `✓ Precio sugerido aplicado: $${suggested.toLocaleString('es-CL')} (PMP $${Math.round(pmp).toLocaleString('es-CL')} + ${this.defaultMarginPercentage()}%)`
+    );
+  }
+
+  cancelEditProduct(): void {
+    this.editingProduct.set(null);
+  }
+
+  saveEditProduct(): void {
+    const target = this.editingProduct();
+    if (!target || this.isSubmitting()) return;
+
+    const newSalePrice = Math.max(1, Number(this.editSalePriceControl.value) || 1);
+    const newStock = Math.max(0, Number(this.editStockControl.value) || 0);
+    const stockChanged = newStock !== target.currentStock;
+
+    if (stockChanged && !this.canSaveEditProduct()) {
+      this.errorMessage.set(
+        'Debes ingresar una glosa o motivo de respaldo (mínimo 5 caracteres) para justificar el ajuste de stock en el Libro Kardex.'
+      );
+      return;
+    }
+
+    const fullReason = stockChanged
+      ? `${this.editReasonCategoryControl.value}: ${this.editReasonDetailControl.value.trim()}`
+      : null;
+
+    this.isSubmitting.set(true);
+    this.errorMessage.set(null);
+
+    this.inventoryService
+      .updateProduct(target.id, {
+        sku: target.sku,
+        name: target.name,
+        salePrice: newSalePrice,
+        costPrice: target.pmpCost,
+        currentStock: newStock,
+        adjustmentReason: fullReason
+      })
+      .pipe(finalize(() => this.isSubmitting.set(false)))
+      .subscribe({
+        next: () => {
+          this.inventoryList.update((list) =>
+            list.map((p) =>
+              p.id === target.id
+                ? { ...p, price: newSalePrice, currentStock: newStock }
+                : p
+            )
+          );
+          this.editingProduct.set(null);
+          this.successMessage.set(
+            stockChanged
+              ? `Precio actualizado y ajuste de stock (${target.currentStock} → ${newStock} u.) registrado con su justificativo en el Libro Kardex.`
+              : `Precio de venta de "${target.name}" actualizado a $${newSalePrice.toLocaleString('es-CL')}.`
+          );
+          if (this.isKardexVisible() || stockChanged) {
+            this.isKardexVisible.set(true);
+            this.loadKardex();
+          }
+        },
+        error: (err: Error) => {
+          this.errorMessage.set(
+            err.message || 'No se pudo actualizar el producto.'
+          );
+        }
+      });
+  }
+
+  toggleKardexView(): void {
+    const nextState = !this.isKardexVisible();
+    this.isKardexVisible.set(nextState);
+    if (nextState) {
+      this.loadKardex();
+    }
+  }
+
+  loadKardex(): void {
+    this.isLoadingKardex.set(true);
+    this.inventoryService
+      .getKardexMovements()
+      .pipe(finalize(() => this.isLoadingKardex.set(false)))
+      .subscribe({
+        next: (movements) => this.kardexList.set(movements ?? []),
+        error: () => this.kardexList.set([])
+      });
   }
 
   private setupRealtimeStockUpdates(): void {
@@ -568,15 +973,18 @@ export class InventoryComponent implements OnInit {
         if (!event || !event.productId) return;
 
         const targetId = event.productId.toString().trim().toLowerCase();
-        console.log('📦 [InventoryComponent] Recibido update de stock para ID:', targetId, 'Nuevo stock:', event.newStock);
 
         this.inventoryList.update((current) =>
           current.map((p) =>
-            (p.id && p.id.toString().trim().toLowerCase() === targetId)
+            p.id && p.id.toString().trim().toLowerCase() === targetId
               ? { ...p, currentStock: event.newStock }
               : p
           )
         );
+
+        if (this.isKardexVisible()) {
+          this.loadKardex();
+        }
       });
   }
 
@@ -655,14 +1063,17 @@ export class InventoryComponent implements OnInit {
             currentStock: command.initialStock,
             minimumStock: command.minimumStock,
             price: command.price,
+            pmpCost: Math.round(command.price * 0.7),
             category: command.category
           };
 
-          // Actualización reactiva inmediata del signal inventoryList sin recargar la página
           this.inventoryList.update((current) => [newProduct, ...current]);
           this.isFormVisible.set(false);
           this.resetForm();
           this.successMessage.set(`Producto "${newProduct.name}" agregado exitosamente al catálogo.`);
+          if (this.isKardexVisible()) {
+            this.loadKardex();
+          }
         },
         error: (err: Error) => {
           this.errorMessage.set(

@@ -9,8 +9,8 @@ using MicroSaaS.Infrastructure.Persistence;
 namespace MicroSaaS.Application.Configurations.Commands.UpdateTenantConfiguration;
 
 /// <summary>
-/// Manejador de <see cref="UpdateTenantConfigurationCommand"/> que persiste los cambios en el esquema aislado del Tenant
-/// e invalida/actualiza la entrada en <see cref="IMemoryCache"/>.
+/// Manejador de <see cref="UpdateTenantConfigurationCommand"/> que persiste los cambios en el esquema aislado del Tenant,
+/// recalcula los precios de venta sobre el PMP según el nuevo margen comercial parametrizado e invalida/actualiza la entrada en <see cref="IMemoryCache"/>.
 /// </summary>
 public class UpdateTenantConfigurationCommandHandler
     : IRequestHandler<UpdateTenantConfigurationCommand, TenantConfigurationDto>
@@ -38,6 +38,10 @@ public class UpdateTenantConfigurationCommandHandler
         var config = await _tenantDbContext.Configurations
             .FirstOrDefaultAsync(cancellationToken);
 
+        var effectiveMargin = request.DefaultMarginPercentage >= 0m
+            ? request.DefaultMarginPercentage
+            : 30.00m;
+
         if (config is null)
         {
             config = TenantConfiguration.Create(
@@ -45,7 +49,11 @@ public class UpdateTenantConfigurationCommandHandler
                 currencyCode: request.CurrencyCode,
                 currencySymbol: request.CurrencySymbol,
                 timeZoneId: request.TimeZoneId,
-                receiptFooterText: request.ReceiptFooterText);
+                receiptFooterText: request.ReceiptFooterText,
+                defaultMarginPercentage: effectiveMargin,
+                businessActivity: request.BusinessActivity,
+                companyAddress: request.CompanyAddress,
+                companyCommune: request.CompanyCommune);
 
             await _tenantDbContext.Configurations.AddAsync(config, cancellationToken);
         }
@@ -56,7 +64,32 @@ public class UpdateTenantConfigurationCommandHandler
                 currencyCode: request.CurrencyCode,
                 currencySymbol: request.CurrencySymbol,
                 timeZoneId: request.TimeZoneId,
-                receiptFooterText: request.ReceiptFooterText);
+                receiptFooterText: request.ReceiptFooterText,
+                defaultMarginPercentage: effectiveMargin,
+                businessActivity: request.BusinessActivity,
+                companyAddress: request.CompanyAddress,
+                companyCommune: request.CompanyCommune);
+        }
+
+        // Actualizar precios de venta de productos con PMP conocido según el nuevo margen parametrizado
+        var products = await _tenantDbContext.Products.ToListAsync(cancellationToken);
+        foreach (var product in products)
+        {
+            var basePmp = product.PmpCost > 0m ? product.PmpCost : product.CostPrice;
+            if (basePmp > 0m)
+            {
+                var updatedSalePrice = Math.Round(
+                    basePmp * (1m + (effectiveMargin / 100m)),
+                    0,
+                    MidpointRounding.AwayFromZero);
+
+                product.Update(
+                    sku: product.Sku,
+                    name: product.Name,
+                    salePrice: updatedSalePrice,
+                    costPrice: basePmp,
+                    currentStock: product.CurrentStock);
+            }
         }
 
         await _tenantDbContext.SaveChangesAsync(cancellationToken);
@@ -67,7 +100,11 @@ public class UpdateTenantConfigurationCommandHandler
             config.CurrencyCode,
             config.CurrencySymbol,
             config.TimeZoneId,
-            config.ReceiptFooterText);
+            config.ReceiptFooterText,
+            config.DefaultMarginPercentage,
+            config.BusinessActivity,
+            config.CompanyAddress,
+            config.CompanyCommune);
 
         var schema = _tenantProvider.GetCurrentSchema();
         _memoryCache.Set($"tenant_configuration:{schema}", dto, CacheDuration);
@@ -75,4 +112,3 @@ public class UpdateTenantConfigurationCommandHandler
         return dto;
     }
 }
-

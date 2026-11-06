@@ -11,6 +11,8 @@ namespace MicroSaaS.Application.Subscriptions.Commands.PaySubscription;
 /// </summary>
 public class PaySubscriptionCommandHandler : IRequestHandler<PaySubscriptionCommand, DateTime>
 {
+    private const decimal DefaultMonthlyFee = 10000m;
+
     private readonly MasterDbContext _masterDbContext;
     private readonly ITenantProvider _tenantProvider;
 
@@ -31,7 +33,9 @@ public class PaySubscriptionCommandHandler : IRequestHandler<PaySubscriptionComm
             tenant = await _masterDbContext.Tenants
                 .FirstOrDefaultAsync(t => t.Id == request.TenantId.Value, cancellationToken);
         }
-        else
+
+        // Fallback por SchemaName si el TenantId del token cambió tras recrear el volumen de BD
+        if (tenant is null)
         {
             var currentSchema = _tenantProvider.GetCurrentSchema();
             if (!string.IsNullOrWhiteSpace(currentSchema) &&
@@ -50,17 +54,29 @@ public class PaySubscriptionCommandHandler : IRequestHandler<PaySubscriptionComm
         var subscription = await _masterDbContext.Subscriptions
             .FirstOrDefaultAsync(s => s.TenantId == tenant.Id, cancellationToken);
 
+        var now = DateTime.UtcNow;
+
         if (subscription is null)
         {
-            throw new InvalidOperationException("No se encontró una suscripción asociada al Tenant.");
+            var initialDueDate = now.AddDays(30);
+            subscription = Subscription.Create(
+                tenantId: tenant.Id,
+                monthlyFee: DefaultMonthlyFee,
+                startDate: now,
+                nextDueDate: initialDueDate);
+
+            tenant.Activate();
+            await _masterDbContext.Subscriptions.AddAsync(subscription, cancellationToken);
+            await _masterDbContext.SaveChangesAsync(cancellationToken);
+
+            return initialDueDate;
         }
 
-        // Reactivar el Tenant y extender la fecha de expiración por 30 días desde ahora (o desde su vencimiento si aún es futuro)
         tenant.Activate();
 
-        var baseDate = subscription.NextDueDate > DateTime.UtcNow
+        var baseDate = subscription.NextDueDate > now
             ? subscription.NextDueDate
-            : DateTime.UtcNow;
+            : now;
 
         var newDueDate = baseDate.AddDays(30);
         subscription.Activate(newDueDate);
@@ -70,4 +86,3 @@ public class PaySubscriptionCommandHandler : IRequestHandler<PaySubscriptionComm
         return newDueDate;
     }
 }
-

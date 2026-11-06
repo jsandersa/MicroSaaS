@@ -3,7 +3,7 @@ using MediatR;
 namespace MicroSaaS.Application.Products.Queries.GetProducts;
 
 /// <summary>
-/// DTO de lectura de un producto del inventario del Tenant actual.
+/// DTO de lectura de un producto del inventario del Tenant actual, incluyendo el Precio Medio Ponderado (PMP).
 /// </summary>
 public record ProductDto(
     Guid Id,
@@ -11,7 +11,8 @@ public record ProductDto(
     string Name,
     decimal SalePrice,
     decimal CostPrice,
-    int CurrentStock);
+    int CurrentStock,
+    decimal PmpCost = 0m);
 
 /// <summary>
 /// Query para obtener el listado de productos del inventario ordenados alfabéticamente por nombre.

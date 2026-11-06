@@ -29,10 +29,22 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.Property(s => s.TenantId)
             .IsRequired();
 
+        builder.Property(s => s.UserId)
+            .IsRequired();
+
+        builder.Property(s => s.CashRegisterSessionId)
+            .IsRequired();
+
+        builder.Property(s => s.TotalAmount)
+            .HasPrecision(18, 2)
+            .IsRequired();
+
+        builder.Property(s => s.CreatedAt)
+            .IsRequired();
+
         builder.HasIndex(s => s.TenantId);
         builder.HasIndex(s => new { s.TenantId, s.TipoDte, s.Folio });
 
-        // Filtro global por TenantId
         if (_context is not null)
         {
             builder.HasQueryFilter(s => _context.CurrentTenantId == null || s.TenantId == _context.CurrentTenantId);
@@ -52,11 +64,11 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .IsRequired();
 
         builder.Property(s => s.RutCliente)
-            .IsRequired()
+            .IsRequired(false)
             .HasMaxLength(20);
 
         builder.Property(s => s.RazonSocialCliente)
-            .IsRequired()
+            .IsRequired(false)
             .HasMaxLength(200);
 
         builder.Property(s => s.MontoNeto)
@@ -73,6 +85,18 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .IsRequired()
             .HasPrecision(18, 2)
             .HasColumnType("decimal(18,2)");
+
+        builder.Property(s => s.PaymentMethod)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(s => s.CashAmount)
+            .HasPrecision(18, 2)
+            .IsRequired();
+
+        builder.Property(s => s.CardAmount)
+            .HasPrecision(18, 2)
+            .IsRequired();
 
         builder.HasMany(s => s.Items)
             .WithOne(i => i.Sale)
@@ -117,6 +141,20 @@ public class SaleItemConfiguration : IEntityTypeConfiguration<SaleItem>
         builder.Property(i => i.SaleId)
             .IsRequired();
 
+        builder.Property(i => i.ProductId)
+            .IsRequired();
+
+        builder.Property(i => i.Quantity)
+            .IsRequired();
+
+        builder.Property(i => i.UnitPrice)
+            .HasPrecision(18, 2)
+            .IsRequired();
+
+        builder.Property(i => i.Subtotal)
+            .HasPrecision(18, 2)
+            .IsRequired();
+
         builder.Property(i => i.NumeroLinea)
             .IsRequired();
 
@@ -143,4 +181,3 @@ public class SaleItemConfiguration : IEntityTypeConfiguration<SaleItem>
             .IsRequired();
     }
 }
-

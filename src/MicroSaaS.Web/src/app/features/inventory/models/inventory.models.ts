@@ -5,6 +5,7 @@ export interface ProductInventoryDTO {
   currentStock: number;
   minimumStock: number;
   price: number;
+  pmpCost: number;
   category: string;
 }
 
@@ -17,3 +18,17 @@ export interface CreateProductCommand {
   category: string;
 }
 
+export interface KardexMovementDTO {
+  id: string;
+  productId: string;
+  productSku: string;
+  productName: string;
+  currentPmpCost: number;
+  movementType: number;
+  movementTypeName: string;
+  quantity: number;
+  unitCost: number;
+  totalValue: number;
+  transactionDate: string;
+  reason?: string;
+}

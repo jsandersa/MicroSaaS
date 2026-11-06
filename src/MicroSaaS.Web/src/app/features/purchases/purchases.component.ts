@@ -56,9 +56,9 @@ export class PurchasesComponent {
       });
   }
 
-  selectProduct(product: ProductDTO) {
+  selectProduct(product: any) {
     const defaultQty = 1;
-    const defaultCost = product.price || 0;
+    const defaultCost = product.unitCost ?? product.costPrice ?? product.price ?? 0;
 
     this.addPurchaseItem(product, defaultQty, defaultCost);
 

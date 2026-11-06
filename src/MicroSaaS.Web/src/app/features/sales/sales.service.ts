@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { BaseApiService } from '../../core/http/base-api.service';
-import { CreateSaleCommand, ProductDTO } from './models/sales.models';
+import { ProductDTO } from './models/sales.models';
 
 interface RawProductResponse {
   id: string;
@@ -11,6 +11,48 @@ interface RawProductResponse {
   salePrice?: number;
   stock?: number;
   currentStock?: number;
+}
+
+export interface CashSessionSummary {
+  id: string;
+  openingAmount: number;
+  expectedClosingAmount: number;
+  openedAt: string;
+  status: string;
+}
+
+export interface CurrentCashSessionResponse {
+  isOpen: boolean;
+  session: CashSessionSummary | null;
+}
+
+export interface CloseCashRegisterResult {
+  sessionId: string;
+  status: number | string;
+  openingAmount: number;
+  expectedCashAmount: number;
+  actualCashAmount: number;
+  cashDifference: number;
+  expectedCardAmount: number;
+  actualCardAmount: number;
+  cardDifference: number;
+  expectedClosingAmount: number;
+  actualClosingAmount: number;
+  totalDifference: number;
+  closedAt: string;
+}
+
+export interface EmittedDteDto {
+  id: string;
+  saleId: string;
+  dteType: number;
+  dteTypeName: string;
+  folio: number;
+  totalAmount: number;
+  status: number;
+  statusName: string;
+  emissionDate: string;
+  xmlContent: string;
 }
 
 @Injectable({
@@ -52,15 +94,47 @@ export class SalesService {
    * Envía el comando de creación de venta hacia el backend CQRS.
    */
   processSale(command: any): Observable<{ id: string }> {
-    // El componente ya aplanó los items y calculó los totales (montoNeto, iva, montoTotal).
-    // Solo agregamos los valores por defecto para folio y cliente si vienen vacíos.
     const payload = {
       ...command,
-      folio: command.folio || (Math.floor(Date.now() / 1000) % 1000000),
+      folio: command.folio || 0,
       rutCliente: command.rutCliente || '66.666.666-6',
       razonSocialCliente: command.razonSocialCliente || 'Cliente POS'
     };
 
     return this.api.post<{ id: string }>('/api/sales', payload);
+  }
+
+  /**
+   * Consulta los Documentos Tributarios Electrónicos (DTE) emitidos por el Tenant actual.
+   */
+  getEmittedDtes(): Observable<EmittedDteDto[]> {
+    return this.api.get<EmittedDteDto[]>('/api/sales/dtes');
+  }
+
+  /**
+   * Consulta si el operador actual posee una sesión de caja abierta.
+   */
+  getCurrentCashSession(): Observable<CurrentCashSessionResponse> {
+    return this.api.get<CurrentCashSessionResponse>('/api/cash-register/current');
+  }
+
+  /**
+   * Abre una nueva sesión diaria de caja con el fondo inicial indicado.
+   */
+  openCashRegister(openingAmount: number): Observable<{ id: string }> {
+    return this.api.post<{ id: string }>('/api/cash-register/open', { openingAmount });
+  }
+
+  /**
+   * Cierra la sesión de caja actual realizando el arqueo y cuadratura de efectivo y tarjetas.
+   */
+  closeCashRegister(
+    actualCashAmount: number,
+    actualCardAmount: number
+  ): Observable<CloseCashRegisterResult> {
+    return this.api.post<CloseCashRegisterResult>('/api/cash-register/close', {
+      actualCashAmount,
+      actualCardAmount
+    });
   }
 }

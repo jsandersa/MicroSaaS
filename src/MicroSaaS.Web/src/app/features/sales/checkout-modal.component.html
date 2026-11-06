@@ -11,7 +11,7 @@
         <div class="modal-body">
             <div class="total-display">
                 <span>Total a Cobrar</span>
-                <span class="amount-huge">\${{ totalAmount | number:'1.0-0' }}</span>
+                <span class="amount-huge">${{ totalAmount | number:'1.0-0' }}</span>
             </div>
 
             <div class="payment-methods">
@@ -32,6 +32,7 @@
                 <div class="input-group">
                     <label>Efectivo Recibido</label>
                     <input type="number" [ngModel]="cashTendered()" (ngModelChange)="onCashTenderedChange($event)"
+                        (focus)="$any($event.target).select()"
                         min="0" class="input-large">
                 </div>
                 }
@@ -48,11 +49,11 @@
             <div class="summary-box">
                 <div class="summary-row" [class.text-danger]="remainingAmount() > 0">
                     <span>Faltante:</span>
-                    <span>\${{ remainingAmount() | number:'1.0-0' }}</span>
+                    <span>${{ remainingAmount() | number:'1.0-0' }}</span>
                 </div>
                 <div class="summary-row text-success">
                     <span>Vuelto a entregar:</span>
-                    <span class="fw-bold">\${{ changeAmount() | number:'1.0-0' }}</span>
+                    <span class="fw-bold">${{ changeAmount() | number:'1.0-0' }}</span>
                 </div>
             </div>
         </div>
@@ -72,7 +73,7 @@
             <h3>Esperando al terminal...</h3>
             <p>Pídele al cliente que acerque su tarjeta o dispositivo al lector de Mercado Pago.</p>
             <div class="terminal-amount">
-                Monto a procesar: \${{ cardTendered() | number:'1.0-0' }}
+                Monto a procesar: ${{ cardTendered() | number:'1.0-0' }}
             </div>
         </div>
         }

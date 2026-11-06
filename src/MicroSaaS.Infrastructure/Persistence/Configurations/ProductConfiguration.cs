@@ -58,7 +58,14 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasPrecision(18, 2)
             .HasColumnType("decimal(18,2)");
 
+        builder.Ignore(p => p.SKU);
+
         builder.Property(p => p.CostPrice)
+            .IsRequired()
+            .HasPrecision(18, 2)
+            .HasColumnType("decimal(18,2)");
+
+        builder.Property(p => p.PmpCost)
             .IsRequired()
             .HasPrecision(18, 2)
             .HasColumnType("decimal(18,2)");

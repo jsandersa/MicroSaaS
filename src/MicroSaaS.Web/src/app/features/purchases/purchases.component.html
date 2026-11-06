@@ -92,11 +92,15 @@
                             </td>
                             <td class="p-3">
                                 <input type="number" [value]="item.quantity" min="1"
+                                    (focus)="$any($event.target).select()"
+                                    (input)="updatePurchaseItem(item.productId, 'quantity', $event)"
                                     (change)="updatePurchaseItem(item.productId, 'quantity', $event)"
                                     class="w-full border border-gray-300 rounded p-1 text-center">
                             </td>
                             <td class="p-3">
                                 <input type="number" [value]="item.unitCost" min="0"
+                                    (focus)="$any($event.target).select()"
+                                    (input)="updatePurchaseItem(item.productId, 'unitCost', $event)"
                                     (change)="updatePurchaseItem(item.productId, 'unitCost', $event)"
                                     class="w-full border border-gray-300 rounded p-1 text-right">
                             </td>

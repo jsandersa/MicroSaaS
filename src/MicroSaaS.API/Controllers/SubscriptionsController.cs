@@ -2,6 +2,7 @@ using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MicroSaaS.Application.Subscriptions.Commands.CreateTenantSubscription;
 using MicroSaaS.Application.Subscriptions.Commands.PaySubscription;
 using MicroSaaS.Infrastructure.Authentication;
 
@@ -24,7 +25,6 @@ public class SubscriptionsController : ControllerBase
         [FromBody] PaySubscriptionCommand? command,
         CancellationToken cancellationToken)
     {
-        // 1. IGNORAR el ID del body por seguridad y extraerlo directamente del Token JWT
         var tenantIdClaim = User.FindFirstValue(JwtProvider.TenantIdClaimName);
 
         if (!Guid.TryParse(tenantIdClaim, out var tenantId) || tenantId == Guid.Empty)
@@ -36,13 +36,30 @@ public class SubscriptionsController : ControllerBase
             });
         }
 
-        // 2. Despachar a MediatR con el TenantId 100% verificado y seguro
         var nextDueDate = await _mediator.Send(new PaySubscriptionCommand(tenantId), cancellationToken);
 
         return Ok(new
         {
             message = "Suscripción reactivada exitosamente por 30 días.",
             nextDueDate
+        });
+    }
+
+    [HttpPost("create")]
+    public async Task<IActionResult> CreateSubscription(
+        [FromBody] CreateTenantSubscriptionCommand command,
+        CancellationToken cancellationToken)
+    {
+        var tenantIdClaim = User.FindFirstValue(JwtProvider.TenantIdClaimName);
+        var effectiveCommand = Guid.TryParse(tenantIdClaim, out var claimTenantId) && claimTenantId != Guid.Empty
+            ? command with { TenantId = claimTenantId }
+            : command;
+
+        var initPointUrl = await _mediator.Send(effectiveCommand, cancellationToken);
+
+        return Ok(new
+        {
+            initPoint = initPointUrl
         });
     }
 }

@@ -2,9 +2,37 @@
     <header class="pos-header">
         <div>
             <h1>Punto de Venta (POS)</h1>
-            <p class="subtitle">Búsqueda rápida de inventario y emisión de ventas con IVA (19%)</p>
+            <p class="subtitle">Búsqueda rápida de inventario, control de caja y emisión de ventas con IVA (19%)</p>
         </div>
+
         <div class="pos-stats">
+            <button
+                type="button"
+                class="btn-dtes-viewer"
+                (click)="openDtesModal()">
+                📄 Ver DTEs Emitidos
+            </button>
+            @if (isCashOpen()) {
+                <span class="badge-cash-open">
+                    🟢 Caja Abierta (Fondo: ${{ currentCashSession()?.openingAmount | number: '1.0-0' }})
+                </span>
+                <button
+                    type="button"
+                    class="btn-cash-close"
+                    (click)="openCloseCashModal()">
+                    Cerrar y Cuadrar Caja
+                </button>
+            } @else {
+                <span class="badge-cash-closed">
+                    🔴 Caja Cerrada
+                </span>
+                <button
+                    type="button"
+                    class="btn-cash-open"
+                    (click)="openCashModal()">
+                    Abrir Caja
+                </button>
+            }
             <span class="badge-items">{{ totalItemsCount() }} unidades en carrito</span>
         </div>
     </header>
@@ -123,15 +151,13 @@
 
             <div class="checkout-section">
                 <div class="customer-field">
-                    <label for="customerRut">RUT Cliente</label>
+                    <label for="customerRut">RUT Cliente (Opcional)</label>
                     <input id="customerRut" type="text" [formControl]="customerRutControl"
                         placeholder="Ej: 12.345.678-5"
                         [class.invalid]="customerRutControl.invalid && customerRutControl.touched" />
                     @if (customerRutControl.invalid && customerRutControl.touched) {
                     <small class="field-error">
-                        @if (customerRutControl.errors?.['required']) {
-                        El RUT del cliente es obligatorio.
-                        } @else if (customerRutControl.errors?.['invalidRut']) {
+                        @if (customerRutControl.errors?.['invalidRut']) {
                         El RUT ingresado no es válido (Módulo 11).
                         }
                     </small>
@@ -166,6 +192,241 @@
         </section>
     </div>
 </div>
+
+<!-- Modal de Apertura de Caja -->
+@if (showOpenCashModal()) {
+<div class="cash-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="openCashTitle" (click)="closeOpenCashModal()">
+    <div class="cash-modal-card" (click)="$event.stopPropagation()">
+        <div class="cash-modal-header">
+            <h3 id="openCashTitle">Apertura de Caja Diaria</h3>
+            <button type="button" class="alert-close" (click)="closeOpenCashModal()">×</button>
+        </div>
+
+        <p class="cash-modal-desc">
+            Ingresa el monto de sencillo / fondo inicial en efectivo con el que inicias tu turno hoy.
+        </p>
+
+        <div class="customer-field">
+            <label for="openingAmountInput">Fondo Inicial en Efectivo (CLP)</label>
+            <input
+                id="openingAmountInput"
+                type="number"
+                min="0"
+                step="1000"
+                (focus)="$any($event.target).select()"
+                [formControl]="openingAmountControl" />
+        </div>
+
+        <div class="cash-modal-actions">
+            <button
+                type="button"
+                class="btn-modal-secondary"
+                [disabled]="isCashActionLoading()"
+                (click)="closeOpenCashModal()">
+                Cancelar
+            </button>
+            <button
+                type="button"
+                class="btn-modal-primary"
+                [disabled]="openingAmountControl.invalid || isCashActionLoading()"
+                (click)="confirmOpenCashRegister()">
+                {{ isCashActionLoading() ? 'Abriendo caja...' : 'Confirmar Apertura de Caja' }}
+            </button>
+        </div>
+    </div>
+</div>
+}
+
+<!-- Modal de Cierre y Cuadratura de Caja -->
+@if (showCloseCashModal()) {
+<div class="cash-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="closeCashTitle" (click)="closeCloseCashModal()">
+    <div class="cash-modal-card" (click)="$event.stopPropagation()">
+        <div class="cash-modal-header">
+            <h3 id="closeCashTitle">Cierre y Cuadratura de Caja</h3>
+            <button type="button" class="alert-close" (click)="closeCloseCashModal()">×</button>
+        </div>
+
+        @if (!closeCashResult()) {
+            <p class="cash-modal-desc">
+                Ingresa el efectivo físico contado en gaveta y el total de vouchers de tarjetas del turno para calcular la cuadratura.
+            </p>
+
+            <div class="customer-field">
+                <label for="actualCashInput">Efectivo Físico Contado (CLP)</label>
+                <input
+                    id="actualCashInput"
+                    type="number"
+                    min="0"
+                    step="100"
+                    (focus)="$any($event.target).select()"
+                    [formControl]="actualCashAmountControl" />
+            </div>
+
+            <div class="customer-field">
+                <label for="actualCardInput">Total Vouchers Tarjetas / Transbank (CLP)</label>
+                <input
+                    id="actualCardInput"
+                    type="number"
+                    min="0"
+                    step="100"
+                    (focus)="$any($event.target).select()"
+                    [formControl]="actualCardAmountControl" />
+            </div>
+
+            <div class="cash-modal-actions">
+                <button
+                    type="button"
+                    class="btn-modal-secondary"
+                    [disabled]="isCashActionLoading()"
+                    (click)="closeCloseCashModal()">
+                    Cancelar
+                </button>
+                <button
+                    type="button"
+                    class="btn-modal-danger"
+                    [disabled]="actualCashAmountControl.invalid || actualCardAmountControl.invalid || isCashActionLoading()"
+                    (click)="confirmCloseCashRegister()">
+                    {{ isCashActionLoading() ? 'Procesando arqueo...' : 'Ejecutar Cierre y Arqueo' }}
+                </button>
+            </div>
+        } @else {
+            <div class="reconciliation-box">
+                <div class="reconciliation-status"
+                    [class.status-balanced]="closeCashResult()!.totalDifference === 0 && closeCashResult()!.cashDifference === 0 && closeCashResult()!.cardDifference === 0"
+                    [class.status-discrepancy]="closeCashResult()!.totalDifference !== 0 || closeCashResult()!.cashDifference !== 0 || closeCashResult()!.cardDifference !== 0">
+                    @if (closeCashResult()!.totalDifference === 0 && closeCashResult()!.cashDifference === 0 && closeCashResult()!.cardDifference === 0) {
+                        ✓ Caja Cuadrada Exactamente (Closed)
+                    } @else {
+                        ⚠ Caja Cerrada con Descuadre (Discrepancy)
+                    }
+                </div>
+
+                <div class="totals-box">
+                    <div class="total-row">
+                        <span>Fondo Inicial Apertura</span>
+                        <span>${{ closeCashResult()!.openingAmount | number: '1.0-0' }}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Efectivo Esperado vs Contado</span>
+                        <span>
+                            ${{ closeCashResult()!.expectedCashAmount | number: '1.0-0' }} /
+                            <strong>${{ closeCashResult()!.actualCashAmount | number: '1.0-0' }}</strong>
+                        </span>
+                    </div>
+                    <div class="total-row">
+                        <span>Diferencia Efectivo</span>
+                        <span [class.diff-neg]="closeCashResult()!.cashDifference < 0" [class.diff-ok]="closeCashResult()!.cashDifference === 0">
+                            ${{ closeCashResult()!.cashDifference | number: '1.0-0' }}
+                        </span>
+                    </div>
+                    <div class="total-row">
+                        <span>Tarjetas Esperado vs Contado</span>
+                        <span>
+                            ${{ closeCashResult()!.expectedCardAmount | number: '1.0-0' }} /
+                            <strong>${{ closeCashResult()!.actualCardAmount | number: '1.0-0' }}</strong>
+                        </span>
+                    </div>
+                    <div class="total-row">
+                        <span>Diferencia Tarjetas</span>
+                        <span [class.diff-neg]="closeCashResult()!.cardDifference < 0" [class.diff-ok]="closeCashResult()!.cardDifference === 0">
+                            ${{ closeCashResult()!.cardDifference | number: '1.0-0' }}
+                        </span>
+                    </div>
+                    <div class="total-row total-final">
+                        <span>Diferencia Total Arqueo</span>
+                        <span [class.diff-neg]="closeCashResult()!.totalDifference < 0" [class.diff-ok]="closeCashResult()!.totalDifference === 0">
+                            ${{ closeCashResult()!.totalDifference | number: '1.0-0' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="cash-modal-actions">
+                    <button
+                        type="button"
+                        class="btn-modal-primary"
+                        (click)="closeCloseCashModal()">
+                        Finalizar y Cerrar Resumen
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+}
+
+<!-- Modal Visor de DTEs Emitidos (SII) -->
+@if (showDtesModal()) {
+<div class="cash-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="dtesModalTitle" (click)="closeDtesModal()">
+    <div class="dte-modal-card" (click)="$event.stopPropagation()">
+        <div class="cash-modal-header">
+            <h3 id="dtesModalTitle">📄 Documentos Tributarios Electrónicos Emitidos (SII)</h3>
+            <button type="button" class="alert-close" (click)="closeDtesModal()">×</button>
+        </div>
+
+        @if (isLoadingDtes()) {
+            <p class="cash-modal-desc">Consultando DTEs emitidos en el esquema del Tenant...</p>
+        } @else if (emittedDtes().length === 0) {
+            <p class="cash-modal-desc">Aún no existen documentos tributarios emitidos.</p>
+        } @else {
+            <div class="dte-viewer-layout">
+                <div class="dte-list-pane">
+                    @for (dte of emittedDtes(); track dte.id) {
+                        <div
+                            class="dte-list-item"
+                            [class.active]="selectedDte()?.id === dte.id"
+                            (click)="selectDte(dte)">
+                            <div class="dte-item-top">
+                                <strong>Folio N° {{ dte.folio }}</strong>
+                                <span class="dte-status-pill">✓ {{ dte.statusName }}</span>
+                            </div>
+                            <div class="dte-item-sub">
+                                <span>{{ dte.dteTypeName }}</span>
+                                <strong>${{ dte.totalAmount | number: '1.0-0' }}</strong>
+                            </div>
+                            <small class="dte-date">{{ dte.emissionDate | date: 'dd/MM/yyyy HH:mm:ss' }}</small>
+                        </div>
+                    }
+                </div>
+
+                @if (selectedDte()) {
+                    <div class="dte-detail-pane">
+                        <div class="dte-stamp-box">
+                            <div class="sii-red-box">
+                                <span>R.U.T.: 77.654.321-K</span>
+                                <strong>{{ selectedDte()!.dteTypeName | uppercase }}</strong>
+                                <span>N° {{ selectedDte()!.folio }}</span>
+                            </div>
+                            <div class="dte-summary-meta">
+                                <p><strong>ID Venta:</strong> {{ selectedDte()!.saleId }}</p>
+                                <p><strong>Fecha Emisión:</strong> {{ selectedDte()!.emissionDate | date: 'dd/MM/yyyy HH:mm:ss' }}</p>
+                                <p><strong>Monto Total (IVA Incl.):</strong> ${{ selectedDte()!.totalAmount | number: '1.0-0' }}</p>
+                                <p><strong>Estado SII:</strong> <span class="diff-ok">{{ selectedDte()!.statusName }}</span></p>
+                            </div>
+                        </div>
+
+                        <div class="xml-header-bar">
+                            <strong>Contenido XML Tributario (ISO-8859-1)</strong>
+                            <button type="button" class="btn-download-xml" (click)="downloadDteXml(selectedDte()!)">
+                                ⬇ Descargar XML
+                            </button>
+                        </div>
+                        <pre class="xml-code-block">{{ selectedDte()!.xmlContent }}</pre>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="cash-modal-actions">
+            <button type="button" class="btn-modal-secondary" (click)="openDtesModal()">
+                🔄 Recargar Lista
+            </button>
+            <button type="button" class="btn-modal-primary" (click)="closeDtesModal()">
+                Cerrar Visor
+            </button>
+        </div>
+    </div>
+</div>
+}
 
 <!-- Modal de Checkout Inyectado -->
 @if (showCheckoutModal()) {

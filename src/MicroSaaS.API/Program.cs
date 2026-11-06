@@ -29,25 +29,34 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Registro de MediatR (capa Application)
+// Registro de MediatR (capa Application) y Pipeline Behavior de Autorización
 builder.Services.AddMediatR(cfg =>
-    cfg.RegisterServicesFromAssembly(typeof(RegisterTenantCommand).Assembly));
+{
+    cfg.RegisterServicesFromAssembly(typeof(RegisterTenantCommand).Assembly);
+    cfg.AddOpenBehavior(typeof(MicroSaaS.Application.Common.Behaviors.AuthorizationBehavior<,>));
+});
 
 // Registro de Infraestructura (ITenantProvider, IJwtProvider, SchemaInterceptor y MasterDbContext)
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// Configuración de Autenticación y Autorización JWT
-var jwtSecretKey = builder.Configuration["JwtSettings:Secret"]
-    ?? builder.Configuration["Jwt:SecretKey"]
-    ?? "MicroSaaS_SuperSecretKey_For_Development_Min32Chars!";
+// Configuración de Autenticación y Autorización JWT (evitando strings vacíos en appsettings.json)
+static string FirstNonEmpty(params string?[] values) =>
+    values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))!.Trim();
 
-var jwtIssuer = builder.Configuration["JwtSettings:Issuer"]
-    ?? builder.Configuration["Jwt:Issuer"]
-    ?? "MicroSaaS.API";
+var jwtSecretKey = FirstNonEmpty(
+    builder.Configuration["JwtSettings:Secret"],
+    builder.Configuration["Jwt:SecretKey"],
+    "MicroSaaS_SuperSecretKey_For_Development_Min32Chars!");
 
-var jwtAudience = builder.Configuration["JwtSettings:Audience"]
-    ?? builder.Configuration["Jwt:Audience"]
-    ?? "MicroSaaS.Client";
+var jwtIssuer = FirstNonEmpty(
+    builder.Configuration["JwtSettings:Issuer"],
+    builder.Configuration["Jwt:Issuer"],
+    "MicroSaaS.API");
+
+var jwtAudience = FirstNonEmpty(
+    builder.Configuration["JwtSettings:Audience"],
+    builder.Configuration["Jwt:Audience"],
+    "MicroSaaS.Client");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -95,9 +104,16 @@ var app = builder.Build();
 // Aplicar migraciones del esquema maestro y ejecutar Data Seeding automáticamente al iniciar el contenedor
 using (var scope = app.Services.CreateScope())
 {
-    var masterDb = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
-    await masterDb.Database.MigrateAsync();
-    await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
+    try
+    {
+        var masterDb = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+        await masterDb.Database.MigrateAsync();
+        await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Ocurrió una advertencia/error durante la migración o Data Seeding inicial, continuando inicio de API.");
+    }
 }
 
 if (app.Environment.IsDevelopment())

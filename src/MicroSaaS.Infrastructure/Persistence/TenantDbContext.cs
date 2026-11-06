@@ -37,6 +37,10 @@ public class TenantDbContext : DbContext
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
+    public DbSet<CashRegisterSession> CashRegisterSessions => Set<CashRegisterSession>();
+    public DbSet<KardexTransaction> KardexTransactions => Set<KardexTransaction>();
+    public DbSet<DteDocument> DteDocuments => Set<DteDocument>();
+    public DbSet<CafAuthorization> CafAuthorizations => Set<CafAuthorization>();
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -79,5 +83,9 @@ public class TenantDbContext : DbContext
         modelBuilder.ApplyConfiguration(new SaleItemConfiguration(this));
         modelBuilder.ApplyConfiguration(new PurchaseConfiguration(this));
         modelBuilder.ApplyConfiguration(new PurchaseItemConfiguration(this));
+        modelBuilder.ApplyConfiguration(new CashRegisterSessionConfiguration(this));
+        modelBuilder.ApplyConfiguration(new KardexTransactionConfiguration(this));
+        modelBuilder.ApplyConfiguration(new DteDocumentConfiguration(this));
+        modelBuilder.ApplyConfiguration(new CafAuthorizationConfiguration());
     }
 }

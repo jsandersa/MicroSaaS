@@ -5,7 +5,10 @@ using MicroSaaS.Core.Interfaces;
 using MicroSaaS.Infrastructure.Authentication;
 using MicroSaaS.Infrastructure.Interceptors;
 using MicroSaaS.Infrastructure.Multitenancy;
+using MicroSaaS.Infrastructure.Payments;
+using MicroSaaS.Infrastructure.Payments.MercadoPago;
 using MicroSaaS.Infrastructure.Persistence;
+using MicroSaaS.Infrastructure.Persistence.Repositories;
 using MicroSaaS.Infrastructure.Security;
 using MicroSaaS.Infrastructure.Sii;
 
@@ -19,9 +22,17 @@ public static class DependencyInjection
     {
         services.AddHttpClient(SiiAuthenticationService.HttpClientName);
 
+        services.AddHttpContextAccessor();
         services.AddScoped<ITenantProvider, TenantProvider>();
         services.AddScoped<ITenantProvisioner, TenantProvisioner>();
         services.AddScoped<IJwtProvider, JwtProvider>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IKardexRepository, KardexRepository>();
+        services.AddScoped<IDteRepository, DteRepository>();
+        services.AddScoped<IDteEmissionService, SiiDteEmissionService>();
+        services.AddScoped<ISaleRepository, SaleRepository>();
         services.AddScoped<IEncryptionService, SymmetricEncryptionService>();
         services.AddScoped<IDocumentSignatureService, SiiSignatureService>();
         services.AddScoped<ISiiAuthenticationService, SiiAuthenticationService>();
@@ -60,6 +71,17 @@ public static class DependencyInjection
             })
             .AddInterceptors(schemaInterceptor);
         });
+
+        // -------------------------------------------------------------
+        // CONFIGURACIÓN: Pasarelas de Pago Multi-Proveedor (Mercado Pago)
+        // -------------------------------------------------------------
+        services.Configure<MercadoPagoOptions>(
+            configuration.GetSection(MercadoPagoOptions.SectionName));
+
+        services.AddHttpClient<MercadoPagoSubscriptionService>();
+        services.AddScoped<ISubscriptionPaymentService>(sp =>
+            sp.GetRequiredService<MercadoPagoSubscriptionService>());
+        services.AddScoped<IPaymentProviderFactory, PaymentProviderFactory>();
 
         return services;
     }

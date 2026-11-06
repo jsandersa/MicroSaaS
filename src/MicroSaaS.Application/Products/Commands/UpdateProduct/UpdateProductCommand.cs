@@ -11,4 +11,5 @@ public record UpdateProductCommand(
     string Name,
     decimal SalePrice,
     decimal CostPrice,
-    int CurrentStock) : IRequest<bool>;
+    int CurrentStock,
+    string? AdjustmentReason = null) : IRequest<bool>;

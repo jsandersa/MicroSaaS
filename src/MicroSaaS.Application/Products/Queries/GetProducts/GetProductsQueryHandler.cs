@@ -30,7 +30,8 @@ public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, IEnumer
                 p.Name,
                 p.SalePrice,
                 p.CostPrice,
-                p.CurrentStock))
+                p.CurrentStock,
+                p.PmpCost > 0m ? p.PmpCost : p.CostPrice))
             .ToListAsync(cancellationToken);
     }
 }

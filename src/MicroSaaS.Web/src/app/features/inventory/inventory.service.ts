@@ -1,7 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { BaseApiService } from '../../core/http/base-api.service';
-import { CreateProductCommand, ProductInventoryDTO } from './models/inventory.models';
+import {
+  CreateProductCommand,
+  KardexMovementDTO,
+  ProductInventoryDTO
+} from './models/inventory.models';
 
 interface RawInventoryItem {
   id: string;
@@ -12,6 +16,8 @@ interface RawInventoryItem {
   minimumStock?: number;
   price?: number;
   salePrice?: number;
+  costPrice?: number;
+  pmpCost?: number;
   category?: string;
 }
 
@@ -34,10 +40,18 @@ export class InventoryService {
           currentStock: item.currentStock ?? item.stock ?? 0,
           minimumStock: item.minimumStock ?? 5,
           price: item.price ?? item.salePrice ?? 0,
+          pmpCost: item.pmpCost ?? item.costPrice ?? 0,
           category: item.category ?? 'General'
         }))
       )
     );
+  }
+
+  /**
+   * Consulta el historial del Libro Kardex mediante HTTP GET hacia /api/inventory/kardex.
+   */
+  getKardexMovements(): Observable<KardexMovementDTO[]> {
+    return this.api.get<KardexMovementDTO[]>('/api/inventory/kardex');
   }
 
   /**
@@ -53,5 +67,24 @@ export class InventoryService {
 
     return this.api.post<ProductInventoryDTO | { id: string }>('/api/inventory', payload);
   }
-}
 
+  /**
+   * Actualiza un producto existente (Precio de Venta, Costo PMP y Stock) mediante HTTP PUT hacia /api/inventory/{id}.
+   */
+  updateProduct(
+    id: string,
+    payload: {
+      sku: string;
+      name: string;
+      salePrice: number;
+      costPrice: number;
+      currentStock: number;
+      adjustmentReason?: string | null;
+    }
+  ): Observable<void> {
+    return this.api.put<void>(`/api/inventory/${id}`, {
+      id,
+      ...payload
+    });
+  }
+}

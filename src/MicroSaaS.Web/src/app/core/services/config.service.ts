@@ -10,6 +10,42 @@ export interface TenantConfiguration {
   currencySymbol: string;
   timeZoneId: string;
   receiptFooterText: string | null;
+  defaultMarginPercentage?: number;
+  businessActivity?: string | null;
+  companyAddress?: string | null;
+  companyCommune?: string | null;
+}
+
+export interface CertificateStatusDto {
+  hasActiveCertificate: boolean;
+  fileName: string | null;
+  subject: string | null;
+  expirationDate: string | null;
+  isExpired: boolean;
+  daysRemaining: number;
+}
+
+export interface CafAuthorizationDto {
+  id: string;
+  dteType: number;
+  dteTypeName: string;
+  startFolio: number;
+  endFolio: number;
+  currentFolio: number;
+  totalFolios: number;
+  usedFolios: number;
+  availableFolios: number;
+  usagePercentage: number;
+  authorizedAt: string;
+  expiresAt: string;
+  isActive: boolean;
+}
+
+export interface RegisterCafPayload {
+  dteType: number;
+  startFolio: number;
+  endFolio: number;
+  xmlContent?: string | null;
 }
 
 @Injectable({
@@ -27,6 +63,18 @@ export class ConfigService {
 
   updateConfiguration(payload: TenantConfiguration): Observable<TenantConfiguration> {
     return this.http.put<TenantConfiguration>(this.configUrl, payload);
+  }
+
+  getCertificateStatus(): Observable<CertificateStatusDto> {
+    return this.http.get<CertificateStatusDto>(`${this.certificatesUrl}/status`);
+  }
+
+  getCafAuthorizations(): Observable<CafAuthorizationDto[]> {
+    return this.http.get<CafAuthorizationDto[]>(`${this.certificatesUrl}/caf`);
+  }
+
+  registerCafAuthorization(payload: RegisterCafPayload): Observable<{ id: string; message: string }> {
+    return this.http.post<{ id: string; message: string }>(`${this.certificatesUrl}/caf`, payload);
   }
 
   uploadCertificate(file: File, password: string): Observable<string> {

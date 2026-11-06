@@ -1,5 +1,5 @@
 .settings-container {
-  max-width: 820px;
+  max-width: 920px;
   margin: 32px auto;
   padding: 0 24px;
   display: flex;
@@ -18,11 +18,19 @@
 }
 
 .settings-form,
-.certificate-form {
+.certificate-form,
+.caf-form {
   margin-top: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.subsection-title {
+  margin: 8px 0 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #1e293b;
 }
 
 .form-grid {
@@ -33,6 +41,146 @@
 
 .full-width {
   width: 100%;
+}
+
+/* Tarjetas de estado de Folios CAF */
+.caf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
+
+.caf-status-box {
+  border: 1px solid #cbd5e1;
+  border-left: 5px solid #16a34a;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.caf-status-box.caf-warning {
+  border-left-color: #d97706;
+  background: #fffbeb;
+}
+
+.caf-status-box.caf-exhausted {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+
+.caf-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.caf-type-title {
+  display: block;
+  font-weight: 800;
+  font-size: 0.98rem;
+  color: #0f172a;
+}
+
+.caf-range-sub {
+  display: block;
+  font-size: 0.82rem;
+  color: #475569;
+  margin-top: 2px;
+}
+
+.caf-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.caf-badge-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.caf-badge-empty {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.caf-progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.caf-progress-fill {
+  height: 100%;
+  background: #16a34a;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.caf-progress-fill.fill-warning {
+  background: #d97706;
+}
+
+.caf-metrics-row {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.caf-empty-banner {
+  padding: 14px;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 0.88rem;
+}
+
+/* Banner de Estado de Certificado Digital */
+.cert-status-banner {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cert-active {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+}
+
+.cert-missing {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.cert-status-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.cert-status-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.84rem;
 }
 
 .file-upload-box {

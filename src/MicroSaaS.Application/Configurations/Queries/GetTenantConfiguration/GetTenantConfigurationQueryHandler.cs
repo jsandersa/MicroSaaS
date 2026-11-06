@@ -50,7 +50,11 @@ public class GetTenantConfigurationQueryHandler
                 c.CurrencyCode,
                 c.CurrencySymbol,
                 c.TimeZoneId,
-                c.ReceiptFooterText))
+                c.ReceiptFooterText,
+                c.DefaultMarginPercentage,
+                c.BusinessActivity,
+                c.CompanyAddress,
+                c.CompanyCommune))
             .FirstOrDefaultAsync(cancellationToken);
 
         if (config is not null)
@@ -61,4 +65,3 @@ public class GetTenantConfigurationQueryHandler
         return config;
     }
 }
-

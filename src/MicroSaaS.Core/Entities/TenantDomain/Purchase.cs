@@ -53,6 +53,7 @@ public class Purchase : IHasDomainEvents
         AddDomainEvent(new ProductPurchasedDomainEvent(
             TenantId: TenantId.ToString(),
             Sku: resolvedSku,
-            Quantity: quantity));
+            Quantity: quantity,
+            UnitCost: item.PrecioUnitario));
     }
 }

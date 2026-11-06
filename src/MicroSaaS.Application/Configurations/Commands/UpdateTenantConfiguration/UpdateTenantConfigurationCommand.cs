@@ -11,5 +11,8 @@ public record UpdateTenantConfigurationCommand(
     string CurrencyCode,
     string CurrencySymbol,
     string TimeZoneId,
-    string? ReceiptFooterText) : IRequest<TenantConfigurationDto>;
-
+    string? ReceiptFooterText,
+    decimal DefaultMarginPercentage = 30.00m,
+    string? BusinessActivity = null,
+    string? CompanyAddress = null,
+    string? CompanyCommune = null) : IRequest<TenantConfigurationDto>;

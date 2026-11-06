@@ -67,6 +67,19 @@ public class TenantProvisioner : ITenantProvisioner
                 ALTER TABLE "{normalizedSchema}"."Products" ADD COLUMN IF NOT EXISTS "SalePrice" decimal(18,2) NOT NULL DEFAULT 0;
                 ALTER TABLE "{normalizedSchema}"."Products" ADD COLUMN IF NOT EXISTS "CostPrice" decimal(18,2) NOT NULL DEFAULT 0;
                 ALTER TABLE "{normalizedSchema}"."Products" ADD COLUMN IF NOT EXISTS "CurrentStock" integer NOT NULL DEFAULT 0;
+                CREATE TABLE IF NOT EXISTS "{normalizedSchema}"."CashRegisterSessions" (
+                    "Id" uuid NOT NULL,
+                    "TenantId" uuid NOT NULL,
+                    "UserId" uuid NOT NULL,
+                    "OpeningAmount" numeric(18,2) NOT NULL DEFAULT 0,
+                    "ExpectedClosingAmount" numeric(18,2) NOT NULL DEFAULT 0,
+                    "ActualClosingAmount" numeric(18,2) NULL,
+                    "OpenedAt" timestamp with time zone NOT NULL,
+                    "ClosedAt" timestamp with time zone NULL,
+                    "Status" integer NOT NULL DEFAULT 1,
+                    CONSTRAINT "PK_CashRegisterSessions" PRIMARY KEY ("Id")
+                );
+                CREATE INDEX IF NOT EXISTS "IX_CashRegisterSessions_TenantId_UserId_Status" ON "{normalizedSchema}"."CashRegisterSessions" ("TenantId", "UserId", "Status");
                 """;
 
             await _context.Database.ExecuteSqlRawAsync(ensureTablesSql, cancellationToken);

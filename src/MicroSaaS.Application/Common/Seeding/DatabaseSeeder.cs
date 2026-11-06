@@ -41,14 +41,20 @@ public static class DatabaseSeeder
 
             var tenantId = await mediator.Send(initialTenantCommand, cancellationToken);
 
+            var createdTenant = await masterDb.Tenants
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.SchemaName == "t_77654321k", cancellationToken);
+
             // Asegurar que el esquema creado tenga su registro por defecto en la tabla Configurations
             await EnsureTenantDefaultConfigurationAsync(
                 tenantDb,
                 tenantProvider,
                 schemaName: "t_77654321k",
+                tenantId: createdTenant?.Id ?? Guid.NewGuid(),
                 logger,
                 cancellationToken);
 
+            tenantProvider.SetCurrentTenantId(null);
             tenantProvider.SetCurrentSchema("public");
 
             logger.LogInformation(
@@ -68,10 +74,12 @@ public static class DatabaseSeeder
                 tenantDb,
                 tenantProvider,
                 tenant.SchemaName,
+                tenant.Id,
                 logger,
                 cancellationToken);
         }
 
+        tenantProvider.SetCurrentTenantId(null);
         tenantProvider.SetCurrentSchema("public");
     }
 
@@ -79,21 +87,31 @@ public static class DatabaseSeeder
         TenantDbContext tenantDb,
         ITenantProvider tenantProvider,
         string schemaName,
+        Guid tenantId,
         ILogger logger,
         CancellationToken cancellationToken)
     {
+        tenantProvider.SetCurrentTenantId(tenantId);
         tenantProvider.SetCurrentSchema(schemaName);
 
         var ensureTableSql = $"""
             CREATE TABLE IF NOT EXISTS "{schemaName}"."Configurations" (
                 "Id" uuid NOT NULL,
                 "TaxPercentage" decimal(5,2) NOT NULL DEFAULT 19.00,
+                "DefaultMarginPercentage" decimal(5,2) NOT NULL DEFAULT 30.00,
                 "CurrencyCode" character varying(3) NOT NULL,
                 "CurrencySymbol" character varying(10) NOT NULL,
                 "TimeZoneId" character varying(100) NOT NULL,
                 "ReceiptFooterText" character varying(500) NULL,
+                "BusinessActivity" character varying(200) NULL,
+                "CompanyAddress" character varying(200) NULL,
+                "CompanyCommune" character varying(100) NULL,
                 CONSTRAINT "PK_Configurations" PRIMARY KEY ("Id")
             );
+            ALTER TABLE "{schemaName}"."Configurations" ADD COLUMN IF NOT EXISTS "DefaultMarginPercentage" decimal(5,2) NOT NULL DEFAULT 30.00;
+            ALTER TABLE "{schemaName}"."Configurations" ADD COLUMN IF NOT EXISTS "BusinessActivity" character varying(200) NULL;
+            ALTER TABLE "{schemaName}"."Configurations" ADD COLUMN IF NOT EXISTS "CompanyAddress" character varying(200) NULL;
+            ALTER TABLE "{schemaName}"."Configurations" ADD COLUMN IF NOT EXISTS "CompanyCommune" character varying(100) NULL;
             CREATE TABLE IF NOT EXISTS "{schemaName}"."DigitalCertificates" (
                 "Id" uuid NOT NULL,
                 "FileName" character varying(255) NOT NULL,
@@ -110,13 +128,25 @@ public static class DatabaseSeeder
                 "Folio" integer NOT NULL,
                 "TipoDte" integer NOT NULL,
                 "FechaEmision" timestamp with time zone NOT NULL,
-                "RutCliente" character varying(20) NOT NULL,
-                "RazonSocialCliente" character varying(200) NOT NULL,
+                "RutCliente" character varying(20) NULL,
+                "RazonSocialCliente" character varying(200) NULL,
                 "MontoNeto" decimal(18,2) NOT NULL,
                 "Iva" decimal(18,2) NOT NULL,
                 "MontoTotal" decimal(18,2) NOT NULL,
+                "PaymentMethod" integer NOT NULL DEFAULT 0,
+                "CashAmount" numeric NOT NULL DEFAULT 0,
+                "CardAmount" numeric NOT NULL DEFAULT 0,
                 CONSTRAINT "PK_Sales" PRIMARY KEY ("Id")
             );
+            ALTER TABLE "{schemaName}"."Sales" ALTER COLUMN "RutCliente" DROP NOT NULL;
+            ALTER TABLE "{schemaName}"."Sales" ALTER COLUMN "RazonSocialCliente" DROP NOT NULL;
+            ALTER TABLE "{schemaName}"."Sales" ADD COLUMN IF NOT EXISTS "PaymentMethod" integer NOT NULL DEFAULT 0;
+            ALTER TABLE "{schemaName}"."Sales" ADD COLUMN IF NOT EXISTS "CashAmount" numeric NOT NULL DEFAULT 0;
+            ALTER TABLE "{schemaName}"."Sales" ADD COLUMN IF NOT EXISTS "CardAmount" numeric NOT NULL DEFAULT 0;
+            ALTER TABLE "{schemaName}"."Sales" ADD COLUMN IF NOT EXISTS "UserId" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
+            ALTER TABLE "{schemaName}"."Sales" ADD COLUMN IF NOT EXISTS "CashRegisterSessionId" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
+            ALTER TABLE "{schemaName}"."Sales" ADD COLUMN IF NOT EXISTS "TotalAmount" numeric(18,2) NOT NULL DEFAULT 0;
+            ALTER TABLE "{schemaName}"."Sales" ADD COLUMN IF NOT EXISTS "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW();
             CREATE TABLE IF NOT EXISTS "{schemaName}"."SaleItems" (
                 "Id" uuid NOT NULL,
                 "SaleId" uuid NOT NULL,
@@ -129,6 +159,10 @@ public static class DatabaseSeeder
                 CONSTRAINT "PK_SaleItems" PRIMARY KEY ("Id"),
                 CONSTRAINT "FK_SaleItems_Sales_SaleId" FOREIGN KEY ("SaleId") REFERENCES "{schemaName}"."Sales" ("Id") ON DELETE CASCADE
             );
+            ALTER TABLE "{schemaName}"."SaleItems" ADD COLUMN IF NOT EXISTS "ProductId" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
+            ALTER TABLE "{schemaName}"."SaleItems" ADD COLUMN IF NOT EXISTS "Quantity" integer NOT NULL DEFAULT 1;
+            ALTER TABLE "{schemaName}"."SaleItems" ADD COLUMN IF NOT EXISTS "UnitPrice" numeric(18,2) NOT NULL DEFAULT 0;
+            ALTER TABLE "{schemaName}"."SaleItems" ADD COLUMN IF NOT EXISTS "Subtotal" numeric(18,2) NOT NULL DEFAULT 0;
             CREATE TABLE IF NOT EXISTS "{schemaName}"."Purchases" (
                 "Id" uuid NOT NULL,
                 "TenantId" uuid NOT NULL,
@@ -174,7 +208,89 @@ public static class DatabaseSeeder
             ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "TenantId" character varying(64) NOT NULL DEFAULT '';
             ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "SalePrice" decimal(18,2) NOT NULL DEFAULT 0;
             ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "CostPrice" decimal(18,2) NOT NULL DEFAULT 0;
+            ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "PmpCost" decimal(18,2) NOT NULL DEFAULT 0;
             ALTER TABLE "{schemaName}"."Products" ADD COLUMN IF NOT EXISTS "CurrentStock" integer NOT NULL DEFAULT 0;
+            UPDATE "{schemaName}"."Products" SET "SalePrice" = ROUND("PmpCost" * 1.30, 0) WHERE "PmpCost" > 0 AND "SalePrice" <= "PmpCost";
+            CREATE TABLE IF NOT EXISTS "{schemaName}"."KardexTransactions" (
+                "Id" uuid NOT NULL,
+                "TenantId" uuid NOT NULL,
+                "ProductId" uuid NOT NULL,
+                "MovementType" integer NOT NULL,
+                "Quantity" integer NOT NULL,
+                "UnitCost" numeric(18,2) NOT NULL DEFAULT 0,
+                "TotalValue" numeric(18,2) NOT NULL DEFAULT 0,
+                "TransactionDate" timestamp with time zone NOT NULL,
+                "Reason" character varying(300) NULL,
+                CONSTRAINT "PK_KardexTransactions" PRIMARY KEY ("Id")
+            );
+            ALTER TABLE "{schemaName}"."KardexTransactions" ADD COLUMN IF NOT EXISTS "Reason" character varying(300) NULL;
+            CREATE INDEX IF NOT EXISTS "IX_KardexTransactions_TenantId_ProductId_TransactionDate" ON "{schemaName}"."KardexTransactions" ("TenantId", "ProductId", "TransactionDate");
+            CREATE TABLE IF NOT EXISTS "{schemaName}"."DteDocuments" (
+                "Id" uuid NOT NULL,
+                "TenantId" uuid NOT NULL,
+                "SaleId" uuid NOT NULL,
+                "DteType" integer NOT NULL,
+                "Folio" integer NOT NULL,
+                "TotalAmount" numeric(18,2) NOT NULL DEFAULT 0,
+                "XmlContent" text NOT NULL DEFAULT '',
+                "Status" integer NOT NULL DEFAULT 1,
+                "EmissionDate" timestamp with time zone NOT NULL,
+                CONSTRAINT "PK_DteDocuments" PRIMARY KEY ("Id")
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_DteDocuments_TenantId_DteType_Folio" ON "{schemaName}"."DteDocuments" ("TenantId", "DteType", "Folio");
+            CREATE TABLE IF NOT EXISTS "{schemaName}"."CashRegisterSessions" (
+                "Id" uuid NOT NULL,
+                "TenantId" uuid NOT NULL,
+                "UserId" uuid NOT NULL,
+                "OpeningAmount" numeric(18,2) NOT NULL DEFAULT 0,
+                "ExpectedClosingAmount" numeric(18,2) NOT NULL DEFAULT 0,
+                "ActualClosingAmount" numeric(18,2) NULL,
+                "OpenedAt" timestamp with time zone NOT NULL,
+                "ClosedAt" timestamp with time zone NULL,
+                "Status" integer NOT NULL DEFAULT 1,
+                CONSTRAINT "PK_CashRegisterSessions" PRIMARY KEY ("Id")
+            );
+            CREATE INDEX IF NOT EXISTS "IX_CashRegisterSessions_TenantId_UserId_Status" ON "{schemaName}"."CashRegisterSessions" ("TenantId", "UserId", "Status");
+            CREATE TABLE IF NOT EXISTS "{schemaName}"."CafAuthorizations" (
+                "Id" uuid NOT NULL,
+                "TenantId" uuid NOT NULL,
+                "DteType" integer NOT NULL,
+                "StartFolio" integer NOT NULL,
+                "EndFolio" integer NOT NULL,
+                "CurrentFolio" integer NOT NULL DEFAULT 0,
+                "XmlContent" text NOT NULL DEFAULT '',
+                "AuthorizedAt" timestamp with time zone NOT NULL,
+                "ExpiresAt" timestamp with time zone NOT NULL,
+                "IsActive" boolean NOT NULL DEFAULT true,
+                CONSTRAINT "PK_CafAuthorizations" PRIMARY KEY ("Id")
+            );
+            CREATE INDEX IF NOT EXISTS "IX_CafAuthorizations_TenantId_DteType_IsActive" ON "{schemaName}"."CafAuthorizations" ("TenantId", "DteType", "IsActive");
+            INSERT INTO "{schemaName}"."CafAuthorizations" ("Id", "TenantId", "DteType", "StartFolio", "EndFolio", "CurrentFolio", "XmlContent", "AuthorizedAt", "ExpiresAt", "IsActive")
+            SELECT
+                gen_random_uuid(),
+                '{tenantId}',
+                39,
+                1,
+                500,
+                COALESCE((SELECT MAX("Folio") FROM "{schemaName}"."DteDocuments" WHERE "DteType" = 39), 0),
+                '<CAF version="1.0"><DA><TD>39</TD><RNG><D>1</D><H>500</H></RNG></DA></CAF>',
+                NOW() - INTERVAL '15 days',
+                NOW() + INTERVAL '6 months',
+                true
+            WHERE NOT EXISTS (SELECT 1 FROM "{schemaName}"."CafAuthorizations" WHERE "DteType" = 39 AND "IsActive" = true);
+            INSERT INTO "{schemaName}"."CafAuthorizations" ("Id", "TenantId", "DteType", "StartFolio", "EndFolio", "CurrentFolio", "XmlContent", "AuthorizedAt", "ExpiresAt", "IsActive")
+            SELECT
+                gen_random_uuid(),
+                '{tenantId}',
+                33,
+                1,
+                100,
+                COALESCE((SELECT MAX("Folio") FROM "{schemaName}"."DteDocuments" WHERE "DteType" = 33), 0),
+                '<CAF version="1.0"><DA><TD>33</TD><RNG><D>1</D><H>100</H></RNG></DA></CAF>',
+                NOW() - INTERVAL '15 days',
+                NOW() + INTERVAL '6 months',
+                true
+            WHERE NOT EXISTS (SELECT 1 FROM "{schemaName}"."CafAuthorizations" WHERE "DteType" = 33 AND "IsActive" = true);
             """;
 
         await tenantDb.Database.ExecuteSqlRawAsync(ensureTableSql, cancellationToken);
@@ -186,7 +302,11 @@ public static class DatabaseSeeder
                 currencyCode: "CLP",
                 currencySymbol: "$",
                 timeZoneId: "America/Santiago",
-                receiptFooterText: null);
+                receiptFooterText: "Gracias por su preferencia. Documento electrónico emitido ante el SII.",
+                defaultMarginPercentage: 30.00m,
+                businessActivity: "Comercialización y Distribución de Insumos",
+                companyAddress: "Av. Libertador Bernardo O'Higgins 1234",
+                companyCommune: "Santiago");
 
             await tenantDb.Configurations.AddAsync(defaultConfig, cancellationToken);
             await tenantDb.SaveChangesAsync(cancellationToken);

@@ -33,6 +33,14 @@ export class BaseApiService {
     return this.http.post<T>(url, body);
   }
 
+  /**
+   * Despacha un comando de actualización mediante HTTP PUT hacia el endpoint especificado.
+   */
+  public put<T>(endpoint: string, body: unknown): Observable<T> {
+    const url = this.buildUrl(endpoint);
+    return this.http.put<T>(url, body);
+  }
+
   private buildUrl(endpoint: string): string {
     let normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     if (this.baseUrl.endsWith('/api') && normalizedEndpoint.startsWith('/api/')) {

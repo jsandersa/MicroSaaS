@@ -16,9 +16,14 @@ public class SymmetricEncryptionService : IEncryptionService
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var rawMasterKey = configuration["MasterKey_SII_Vault"]
-            ?? configuration["EncryptionSettings:MasterKey"]
-            ?? "MasterKey_SII_Vault_Default_AES256_Secret_Key_2026!";
+        var rawMasterKey = new[]
+            {
+                configuration["MasterKey_SII_Vault"],
+                configuration["EncryptionSettings:MasterKey"],
+                "MasterKey_SII_Vault_Default_AES256_Secret_Key_2026!"
+            }
+            .First(v => !string.IsNullOrWhiteSpace(v))!
+            .Trim();
 
         // Derivar una llave exacta de 256 bits (32 bytes) mediante SHA-256 para AES-256
         _key = SHA256.HashData(Encoding.UTF8.GetBytes(rawMasterKey));
@@ -37,7 +42,6 @@ public class SymmetricEncryptionService : IEncryptionService
         var plainBytes = Encoding.UTF8.GetBytes(plainText);
         var cipherBytes = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
 
-        // Anteponer los 16 bytes del IV al texto cifrado y codificar en Base64
         var result = new byte[aes.IV.Length + cipherBytes.Length];
         Buffer.BlockCopy(aes.IV, 0, result, 0, aes.IV.Length);
         Buffer.BlockCopy(cipherBytes, 0, result, aes.IV.Length, cipherBytes.Length);
@@ -55,7 +59,7 @@ public class SymmetricEncryptionService : IEncryptionService
         aes.KeySize = 256;
         aes.Key = _key;
 
-        var ivLength = aes.BlockSize / 8; // 16 bytes
+        var ivLength = aes.BlockSize / 8;
         if (fullCipher.Length <= ivLength)
         {
             throw new CryptographicException("El texto cifrado proporcionado no es válido.");
@@ -75,4 +79,3 @@ public class SymmetricEncryptionService : IEncryptionService
         return Encoding.UTF8.GetString(decryptedBytes);
     }
 }
-

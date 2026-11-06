@@ -1,10 +1,10 @@
 <div class="settings-container">
-  <!-- Sección 1: Configuración de la Empresa -->
+  <!-- Sección 1: Configuración Comercial y Tributaria de la Empresa -->
   <mat-card class="settings-card">
     <mat-card-header>
       <mat-icon mat-card-avatar color="primary" class="settings-icon">settings</mat-icon>
       <mat-card-title>Configuración de la Empresa</mat-card-title>
-      <mat-card-subtitle>Parámetros tributarios, regionales y de facturación de tu Pyme</mat-card-subtitle>
+      <mat-card-subtitle>Parámetros tributarios, margen comercial sobre PMP y datos de casa matriz para emisión SII</mat-card-subtitle>
     </mat-card-header>
 
     <mat-card-content>
@@ -12,7 +12,12 @@
         <div class="form-grid">
           <mat-form-field appearance="outline">
             <mat-label>Porcentaje de Impuesto / IVA (%)</mat-label>
-            <input matInput type="number" step="0.01" formControlName="taxPercentage" placeholder="19.00" />
+            <input matInput type="number" step="0.01" (focus)="$any($event.target).select()" formControlName="taxPercentage" placeholder="19.00" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Margen Comercial sobre PMP (%)</mat-label>
+            <input matInput type="number" step="0.5" min="0" max="500" (focus)="$any($event.target).select()" formControlName="defaultMarginPercentage" placeholder="30.00" />
           </mat-form-field>
 
           <mat-form-field appearance="outline">
@@ -29,13 +34,30 @@
             <mat-label>Zona Horaria (IANA)</mat-label>
             <input matInput formControlName="timeZoneId" placeholder="America/Santiago" />
           </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Comuna Casa Matriz (SII)</mat-label>
+            <input matInput maxlength="100" formControlName="companyCommune" placeholder="Ej: Santiago / Providencia" />
+          </mat-form-field>
+        </div>
+
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Giro Comercial del Emisor (SII)</mat-label>
+            <input matInput maxlength="200" formControlName="businessActivity" placeholder="Ej: Comercialización y Distribución de Insumos" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Dirección Casa Matriz (SII)</mat-label>
+            <input matInput maxlength="200" formControlName="companyAddress" placeholder="Ej: Av. Libertador Bernardo O'Higgins 1234" />
+          </mat-form-field>
         </div>
 
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Texto al pie del Comprobante / Boleta (Opcional)</mat-label>
           <textarea
             matInput
-            rows="3"
+            rows="2"
             maxlength="500"
             formControlName="receiptFooterText"
             placeholder="Gracias por su compra en nuestra sucursal.">
@@ -61,15 +83,144 @@
     </mat-card-content>
   </mat-card>
 
-  <!-- Sección 2: Bóveda de Certificado Digital SII -->
+  <!-- Sección 2: Administración de Folios CAF (Código de Autorización de Folios SII) -->
+  <mat-card class="settings-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar color="primary" class="settings-icon">receipt_long</mat-icon>
+      <mat-card-title>Administración de Folios CAF (SII)</mat-card-title>
+      <mat-card-subtitle>Control de rangos autorizados, semáforo de folios disponibles y carga de archivos CAF (.xml)</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <!-- Tarjetas de Estado de Folios Activos -->
+      <div class="caf-grid">
+        @for (caf of cafList(); track caf.id) {
+          <div class="caf-status-box" [class.caf-warning]="caf.usagePercentage >= 80" [class.caf-exhausted]="caf.availableFolios === 0">
+            <div class="caf-box-header">
+              <div>
+                <span class="caf-type-title">{{ caf.dteTypeName }}</span>
+                <span class="caf-range-sub">Rango Autorizado: <strong>{{ caf.startFolio }}</strong> al <strong>{{ caf.endFolio }}</strong></span>
+              </div>
+              <span class="caf-badge" [class.caf-badge-ok]="caf.availableFolios > 0" [class.caf-badge-empty]="caf.availableFolios === 0">
+                {{ caf.availableFolios > 0 ? caf.availableFolios + ' disponibles' : 'Agotado' }}
+              </span>
+            </div>
+
+            <div class="caf-progress-track">
+              <div
+                class="caf-progress-fill"
+                [style.width.%]="caf.usagePercentage > 100 ? 100 : (caf.usagePercentage < 2 && caf.usedFolios > 0 ? 3 : caf.usagePercentage)"
+                [class.fill-warning]="caf.usagePercentage >= 80"
+              ></div>
+            </div>
+
+            <div class="caf-metrics-row">
+              <span>Último Folio Emitido: <strong>{{ caf.currentFolio > 0 ? 'N° ' + caf.currentFolio : 'Sin emisiones' }}</strong></span>
+              <span>Uso: <strong>{{ caf.usedFolios }} / {{ caf.totalFolios }}</strong> ({{ caf.usagePercentage }}%)</span>
+              <span>Vence: <strong>{{ caf.expiresAt | date: 'dd/MM/yyyy' }}</strong></span>
+            </div>
+          </div>
+        } @empty {
+          <div class="caf-empty-banner">
+            No hay rangos CAF activos registrados. Autoriza un rango de folios abajo para comenzar a emitir DTEs.
+          </div>
+        }
+      </div>
+
+      <!-- Formulario para Cargar / Autorizar Nuevo Rango CAF -->
+      <form [formGroup]="cafForm" (ngSubmit)="onSaveCaf(cafXmlInput)" class="caf-form">
+        <h4 class="subsection-title">Cargar o Renovar Rango de Folios CAF</h4>
+
+        <div class="file-upload-box">
+          <label class="file-label" for="cafXmlFileInput">Opcional: Importar archivo XML CAF del SII (Autocompleta Tipo DTE y Rango)</label>
+          <input
+            #cafXmlInput
+            id="cafXmlFileInput"
+            type="file"
+            accept=".xml"
+            (change)="onCafXmlFileSelected($event)"
+            class="file-input" />
+          @if (selectedCafXmlName()) {
+            <span class="selected-file-name">
+              XML CAF leído: <strong>{{ selectedCafXmlName() }}</strong>
+            </span>
+          }
+        </div>
+
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Tipo de Documento Tributario (DTE)</mat-label>
+            <mat-select formControlName="dteType">
+              <mat-option [value]="39">Boleta Electrónica (39)</mat-option>
+              <mat-option [value]="33">Factura Electrónica (33)</mat-option>
+              <mat-option [value]="61">Nota de Crédito Electrónica (61)</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Folio Inicial (Desde)</mat-label>
+            <input matInput type="number" min="1" (focus)="$any($event.target).select()" formControlName="startFolio" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Folio Final (Hasta)</mat-label>
+            <input matInput type="number" min="1" (focus)="$any($event.target).select()" formControlName="endFolio" />
+          </mat-form-field>
+        </div>
+
+        @if (cafStatusMessage()) {
+          <p [class.success-text]="!cafHasError()" [class.error-text]="cafHasError()">
+            {{ cafStatusMessage() }}
+          </p>
+        }
+
+        <div class="actions-row">
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            [disabled]="cafForm.invalid || isSavingCaf()">
+            {{ isSavingCaf() ? 'Activando CAF...' : 'Autorizar y Activar Rango CAF' }}
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Sección 3: Bóveda de Certificado Digital SII -->
   <mat-card class="settings-card certificate-card">
     <mat-card-header>
       <mat-icon mat-card-avatar color="primary" class="settings-icon">verified_user</mat-icon>
       <mat-card-title>Certificado Digital SII</mat-card-title>
-      <mat-card-subtitle>Sube tu firma electrónica (.pfx / .p12) para emisión de DTE ante el SII</mat-card-subtitle>
+      <mat-card-subtitle>Sube tu firma electrónica (.pfx / .p12) para timbraje y firma criptográfica de DTE ante el SII</mat-card-subtitle>
     </mat-card-header>
 
     <mat-card-content>
+      <!-- Estado Actual del Certificado en Bóveda -->
+      @if (certificateStatus(); as cert) {
+        @if (cert.hasActiveCertificate) {
+          <div class="cert-status-banner cert-active">
+            <div class="cert-status-title">
+              🟢 Certificado Digital Activo en Bóveda Cifrada (AES-256)
+            </div>
+            <div class="cert-status-details">
+              <span><strong>Archivo:</strong> {{ cert.fileName }}</span>
+              <span><strong>Titular:</strong> {{ cert.subject }}</span>
+              <span><strong>Expira:</strong> {{ cert.expirationDate | date: 'dd/MM/yyyy' }} ({{ cert.daysRemaining }} días restantes)</span>
+            </div>
+          </div>
+        } @else {
+          <div class="cert-status-banner cert-missing">
+            <div class="cert-status-title">
+              🟠 Sin Certificado Digital Registrado (Modo Simulación / Certificación SII Activo)
+            </div>
+            <div class="cert-status-details">
+              <span>Puedes emitir DTEs de prueba ahora mismo o cargar tu archivo <strong>.pfx / .p12</strong> cuando pases a producción.</span>
+            </div>
+          </div>
+        }
+      }
+
       <div class="certificate-form">
         <div class="file-upload-box">
           <label class="file-label" for="certificateFileInput">Archivo de Certificado (.pfx o .p12)</label>
