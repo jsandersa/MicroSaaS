@@ -1,7 +1,9 @@
-import { Component, EventEmitter, Input, OnInit, Output, computed, signal, effect } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, computed, signal, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { rutValidator } from '../../shared/validators/rut.validator';
+import { ConfigService } from '../../core/services/config.service';
+import { AuthService } from '../../core/services/auth.service';
 
 export type PaymentMethod = 'CASH' | 'CARD' | 'MIXED';
 export type CheckoutStatus = 'IDLE' | 'WAITING_TERMINAL' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
@@ -23,6 +25,9 @@ export interface PaymentDetails {
     styleUrls: ['./checkout-modal.component.css']
 })
 export class CheckoutModalComponent implements OnInit {
+    readonly configService = inject(ConfigService);
+    readonly authService = inject(AuthService);
+
     @Input({ required: true }) totalAmount!: number;
     @Input() initialDteType = 39;
     @Input() initialCustomerRut = '';

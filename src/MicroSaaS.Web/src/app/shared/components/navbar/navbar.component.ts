@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../../core/services/auth.service';
+import { ConfigService } from '../../../core/services/config.service';
 
 @Component({
   selector: 'app-navbar',
@@ -13,6 +14,7 @@ import { AuthService } from '../../../core/services/auth.service';
 })
 export class NavbarComponent {
   readonly authService = inject(AuthService);
+  readonly configService = inject(ConfigService);
   private readonly router = inject(Router);
 
   onLogout(): void {

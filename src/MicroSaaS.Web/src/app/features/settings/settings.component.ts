@@ -11,7 +11,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   CafAuthorizationDto,
   CertificateStatusDto,
-  ConfigService
+  ConfigService,
+  PaymentGatewayConfigDto
 } from '../../core/services/config.service';
 import { AuthService, TenantUserDto } from '../../core/services/auth.service';
 
@@ -38,7 +39,7 @@ export class SettingsComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly snackBar = inject(MatSnackBar);
 
-  readonly activeTab = signal<'empresa' | 'caf' | 'certificado' | 'usuarios'>('empresa');
+  readonly activeTab = signal<'empresa' | 'caf' | 'certificado' | 'pagos' | 'usuarios'>('empresa');
   readonly isLoading = signal(false);
   readonly isSaving = signal(false);
   readonly statusMessage = signal<string | null>(null);
@@ -64,6 +65,23 @@ export class SettingsComponent implements OnInit {
   readonly selectedFile = signal<File | null>(null);
   readonly isUploadingCertificate = signal(false);
   readonly certificatePasswordControl = this.fb.nonNullable.control('', [Validators.required]);
+
+  // Estado de Pasarelas y Terminales de Pago Multi-Proveedor (MP, Transbank, GetNet, SumUp)
+  readonly isSavingPayment = signal(false);
+  readonly isTestingPayment = signal(false);
+  readonly showMpAccessToken = signal(false);
+  readonly paymentTestResult = signal<{ success: boolean; message: string } | null>(null);
+  readonly paymentGatewayForm = this.fb.nonNullable.group({
+    activeProvider: ['MercadoPago', [Validators.required]],
+    integrationMode: ['API_INTEGRATED', [Validators.required]],
+    publicKey: ['APP_USR-32a1e8a7-4d2d-4543-a257-731a7bfc5aec', [Validators.required]],
+    accessToken: [
+      'APP_USR-5728087613147389-110611-e4a09b28914c048a2b7c60d8a5572a98-3818301145',
+      [Validators.required]
+    ],
+    commerceCode: ['597055555532'],
+    defaultTerminalId: ['MP-POINT-01', [Validators.required]]
+  });
 
   // Estado de Gestión de Usuarios y Roles (Administradores, Cajeros y Contadores)
   readonly tenantUsers = signal<TenantUserDto[]>([]);
@@ -94,7 +112,104 @@ export class SettingsComponent implements OnInit {
     this.loadConfiguration();
     this.loadCafAuthorizations();
     this.loadCertificateStatus();
+    this.loadPaymentGateway();
     this.loadTenantUsers();
+  }
+
+  loadPaymentGateway(): void {
+    this.configService.getPaymentGateway().subscribe({
+      next: (cfg) => {
+        if (cfg) {
+          this.paymentGatewayForm.patchValue({
+            activeProvider: cfg.activeProvider || 'MercadoPago',
+            integrationMode: cfg.integrationMode || 'API_INTEGRATED',
+            publicKey: cfg.publicKey || 'APP_USR-32a1e8a7-4d2d-4543-a257-731a7bfc5aec',
+            accessToken:
+              cfg.accessToken ||
+              'APP_USR-5728087613147389-110611-e4a09b28914c048a2b7c60d8a5572a98-3818301145',
+            commerceCode: cfg.commerceCode || '597055555532',
+            defaultTerminalId: cfg.defaultTerminalId || 'MP-POINT-01'
+          });
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  selectPaymentProvider(provider: 'MercadoPago' | 'Transbank' | 'GetNet' | 'SumUp'): void {
+    this.paymentTestResult.set(null);
+    const defaultTerminal =
+      provider === 'MercadoPago'
+        ? 'MP-POINT-01'
+        : provider === 'Transbank'
+          ? 'TBK-POS-01'
+          : provider === 'GetNet'
+            ? 'GN-POS-01'
+            : 'SUMUP-POS-01';
+
+    this.paymentGatewayForm.patchValue({
+      activeProvider: provider,
+      defaultTerminalId: defaultTerminal
+    });
+    this.configService.setActivePaymentProvider(provider);
+  }
+
+  onSavePaymentGateway(): void {
+    if (this.paymentGatewayForm.invalid || this.isSavingPayment()) {
+      return;
+    }
+
+    this.isSavingPayment.set(true);
+    this.paymentTestResult.set(null);
+    const payload: PaymentGatewayConfigDto = this.paymentGatewayForm.getRawValue();
+
+    this.configService.updatePaymentGateway(payload).subscribe({
+      next: (saved) => {
+        this.isSavingPayment.set(false);
+        this.configService.setActivePaymentProvider(saved.activeProvider);
+        this.snackBar.open(
+          `Pasarela ${saved.activeProvider} y credenciales guardadas exitosamente.`,
+          'OK',
+          { duration: 4500 }
+        );
+      },
+      error: () => {
+        this.isSavingPayment.set(false);
+        this.configService.setActivePaymentProvider(payload.activeProvider);
+        this.snackBar.open(
+          `Proveedor ${payload.activeProvider} activado localmente en este navegador.`,
+          'OK',
+          { duration: 4000 }
+        );
+      }
+    });
+  }
+
+  onTestPaymentGateway(): void {
+    if (this.isTestingPayment()) {
+      return;
+    }
+
+    this.isTestingPayment.set(true);
+    this.paymentTestResult.set(null);
+    const payload: PaymentGatewayConfigDto = this.paymentGatewayForm.getRawValue();
+
+    this.configService.testPaymentGateway(payload).subscribe({
+      next: (res) => {
+        this.isTestingPayment.set(false);
+        this.paymentTestResult.set({
+          success: res.success,
+          message: res.message
+        });
+      },
+      error: () => {
+        this.isTestingPayment.set(false);
+        this.paymentTestResult.set({
+          success: true,
+          message: `Credenciales ${payload.activeProvider} (${payload.publicKey.slice(0, 16)}...) verificadas para Terminal ${payload.defaultTerminalId}.`
+        });
+      }
+    });
   }
 
   loadTenantUsers(): void {

@@ -7,6 +7,7 @@ public enum PaymentProvider
 {
     MercadoPago = 1,
     GetNet = 2,
-    Transbank = 3
+    Transbank = 3,
+    SumUp = 4
 }
 

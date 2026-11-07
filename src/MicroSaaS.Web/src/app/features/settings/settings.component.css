@@ -1,5 +1,5 @@
 .settings-container {
-  max-width: 960px;
+  max-width: 1060px;
   margin: 24px auto;
   padding: 0 24px 32px;
   display: flex;
@@ -28,7 +28,7 @@
 
 .settings-tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
   gap: 8px;
   background: #f1f5f9;
   padding: 6px;

@@ -10,12 +10,12 @@ public sealed class MercadoPagoOptions
     /// <summary>
     /// Access Token privado de producción o pruebas (APP_USR-...).
     /// </summary>
-    public string AccessToken { get; set; } = string.Empty;
+    public string AccessToken { get; set; } = "APP_USR-5728087613147389-110611-e4a09b28914c048a2b7c60d8a5572a98-3818301145";
 
     /// <summary>
     /// Public Key del comercio en Mercado Pago.
     /// </summary>
-    public string PublicKey { get; set; } = string.Empty;
+    public string PublicKey { get; set; } = "APP_USR-32a1e8a7-4d2d-4543-a257-731a7bfc5aec";
 
     /// <summary>
     /// URL base de la API de Mercado Pago.

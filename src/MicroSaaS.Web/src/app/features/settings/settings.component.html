@@ -37,6 +37,15 @@
       <button
         type="button"
         class="settings-tab-btn"
+        [class.active]="activeTab() === 'pagos'"
+        (click)="activeTab.set('pagos')"
+      >
+        💳 Pasarelas de Pago
+        <span class="tab-pill">{{ paymentGatewayForm.controls.activeProvider.value === 'MercadoPago' ? 'MP' : paymentGatewayForm.controls.activeProvider.value }}</span>
+      </button>
+      <button
+        type="button"
+        class="settings-tab-btn"
         [class.active]="activeTab() === 'usuarios'"
         (click)="activeTab.set('usuarios')"
       >
@@ -310,6 +319,167 @@
           </button>
         </div>
       </div>
+    </mat-card-content>
+  </mat-card>
+  }
+
+  @if (activeTab() === 'pagos') {
+  <!-- Sección 4: Pasarelas y Terminales de Pago Multi-Proveedor (MP, Transbank, GetNet, SumUp) -->
+  <mat-card class="settings-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar color="primary" class="settings-icon">point_of_sale</mat-icon>
+      <mat-card-title>💳 Pasarelas de Pago y Terminales POS (Multi-Proveedor)</mat-card-title>
+      <mat-card-subtitle>
+        Selecciona el proveedor de cobro con tarjeta de la empresa (Mercado Pago Point, Transbank, GetNet o SumUp) y configura tus credenciales de integración
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <!-- Selector Visual de los 4 Proveedores -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:0.75rem;margin:1rem 0 1.4rem;">
+        <button
+          type="button"
+          (click)="selectPaymentProvider('MercadoPago')"
+          [style.border]="paymentGatewayForm.controls.activeProvider.value === 'MercadoPago' ? '2px solid #0284c7' : '1px solid #cbd5e1'"
+          [style.background]="paymentGatewayForm.controls.activeProvider.value === 'MercadoPago' ? '#f0f9ff' : '#ffffff'"
+          style="padding:0.9rem;border-radius:10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:0.25rem;"
+        >
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong style="color:#0369a1;font-size:0.95rem;">💙 Mercado Pago</strong>
+            @if (paymentGatewayForm.controls.activeProvider.value === 'MercadoPago') {
+              <span style="background:#0284c7;color:#fff;font-size:0.68rem;padding:2px 7px;border-radius:999px;font-weight:700;">ACTIVO</span>
+            }
+          </div>
+          <small style="color:#475569;font-size:0.76rem;">Point Smart / API Payment Intents & Suscripciones</small>
+        </button>
+
+        <button
+          type="button"
+          (click)="selectPaymentProvider('Transbank')"
+          [style.border]="paymentGatewayForm.controls.activeProvider.value === 'Transbank' ? '2px solid #be123c' : '1px solid #cbd5e1'"
+          [style.background]="paymentGatewayForm.controls.activeProvider.value === 'Transbank' ? '#fff1f2' : '#ffffff'"
+          style="padding:0.9rem;border-radius:10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:0.25rem;"
+        >
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong style="color:#be123c;font-size:0.95rem;">❤️ Transbank POS</strong>
+            @if (paymentGatewayForm.controls.activeProvider.value === 'Transbank') {
+              <span style="background:#be123c;color:#fff;font-size:0.68rem;padding:2px 7px;border-radius:999px;font-weight:700;">ACTIVO</span>
+            }
+          </div>
+          <small style="color:#475569;font-size:0.76rem;">Redcompra / Webpay Plus / POS Integrado</small>
+        </button>
+
+        <button
+          type="button"
+          (click)="selectPaymentProvider('GetNet')"
+          [style.border]="paymentGatewayForm.controls.activeProvider.value === 'GetNet' ? '2px solid #dc2626' : '1px solid #cbd5e1'"
+          [style.background]="paymentGatewayForm.controls.activeProvider.value === 'GetNet' ? '#fef2f2' : '#ffffff'"
+          style="padding:0.9rem;border-radius:10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:0.25rem;"
+        >
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong style="color:#dc2626;font-size:0.95rem;">🔴 GetNet Santander</strong>
+            @if (paymentGatewayForm.controls.activeProvider.value === 'GetNet') {
+              <span style="background:#dc2626;color:#fff;font-size:0.68rem;padding:2px 7px;border-radius:999px;font-weight:700;">ACTIVO</span>
+            }
+          </div>
+          <small style="color:#475569;font-size:0.76rem;">Terminal GetNet Smart POS / Abono en 24h</small>
+        </button>
+
+        <button
+          type="button"
+          (click)="selectPaymentProvider('SumUp')"
+          [style.border]="paymentGatewayForm.controls.activeProvider.value === 'SumUp' ? '2px solid #0f172a' : '1px solid #cbd5e1'"
+          [style.background]="paymentGatewayForm.controls.activeProvider.value === 'SumUp' ? '#f8fafc' : '#ffffff'"
+          style="padding:0.9rem;border-radius:10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:0.25rem;"
+        >
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong style="color:#0f172a;font-size:0.95rem;">🖤 SumUp Chile</strong>
+            @if (paymentGatewayForm.controls.activeProvider.value === 'SumUp') {
+              <span style="background:#0f172a;color:#fff;font-size:0.68rem;padding:2px 7px;border-radius:999px;font-weight:700;">ACTIVO</span>
+            }
+          </div>
+          <small style="color:#475569;font-size:0.76rem;">Lector SumUp Air / Solo & Cloud API</small>
+        </button>
+      </div>
+
+      <form [formGroup]="paymentGatewayForm" (ngSubmit)="onSavePaymentGateway()" class="settings-form">
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Modo de Integración con la Máquina</mat-label>
+            <mat-select formControlName="integrationMode">
+              <mat-option value="API_INTEGRATED">⚡ Integración Directa por API (Envío automático de monto a Máquina)</mat-option>
+              <mat-option value="STANDALONE_VOUCHER">🧾 Terminal Autónomo (Confirmación de Voucher en Caja)</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>🖥️ ID de Terminal Principal por Defecto</mat-label>
+            <input matInput formControlName="defaultTerminalId" placeholder="Ej: MP-POINT-01 / TBK-POS-01" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Código de Comercio / Sucursal (Opcional)</mat-label>
+            <input matInput formControlName="commerceCode" placeholder="Ej: 597055555532" />
+          </mat-form-field>
+        </div>
+
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Public Key / API Key ({{ paymentGatewayForm.controls.activeProvider.value }})</mat-label>
+            <input matInput formControlName="publicKey" placeholder="APP_USR-..." />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Access Token Privado ({{ paymentGatewayForm.controls.activeProvider.value }})</mat-label>
+            <input
+              matInput
+              [type]="showMpAccessToken() ? 'text' : 'password'"
+              formControlName="accessToken"
+              placeholder="APP_USR-..."
+            />
+            <button
+              type="button"
+              matSuffix
+              (click)="showMpAccessToken.set(!showMpAccessToken())"
+              style="background:transparent;border:none;cursor:pointer;padding:0 0.65rem;font-size:0.78rem;color:#475569;font-weight:600;"
+            >
+              {{ showMpAccessToken() ? '🙈 Ocultar' : '👁️ Ver' }}
+            </button>
+          </mat-form-field>
+        </div>
+
+        @if (paymentTestResult(); as test) {
+          <div
+            [style.background]="test.success ? '#ecfdf5' : '#fef2f2'"
+            [style.border]="test.success ? '1px solid #6ee7b7' : '1px solid #fecaca'"
+            [style.color]="test.success ? '#065f46' : '#991b1b'"
+            style="padding:0.85rem 1rem;border-radius:10px;font-size:0.86rem;font-weight:600;"
+          >
+            ✓ {{ test.message }}
+          </div>
+        }
+
+        <div class="actions-row" style="gap:0.75rem;flex-wrap:wrap;">
+          <button
+            mat-stroked-button
+            color="primary"
+            type="button"
+            [disabled]="isTestingPayment()"
+            (click)="onTestPaymentGateway()"
+          >
+            {{ isTestingPayment() ? 'Consultando API...' : '⚡ Probar Conexión con Proveedor' }}
+          </button>
+
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            [disabled]="paymentGatewayForm.invalid || isSavingPayment()"
+          >
+            {{ isSavingPayment() ? 'Guardando...' : '💾 Guardar Proveedor y Credenciales' }}
+          </button>
+        </div>
+      </form>
     </mat-card-content>
   </mat-card>
   }

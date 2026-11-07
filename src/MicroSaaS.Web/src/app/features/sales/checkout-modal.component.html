@@ -66,7 +66,7 @@
                         💵 Efectivo
                     </button>
                     <button type="button" [class.active]="selectedMethod() === 'CARD'" (click)="selectedMethod.set('CARD')">
-                        💳 Tarjeta (MP)
+                        💳 Tarjeta ({{ configService.activeProviderShortName() }})
                     </button>
                     <button type="button" [class.active]="selectedMethod() === 'MIXED'" (click)="selectedMethod.set('MIXED')">
                         🔀 Mixto
@@ -118,8 +118,8 @@
         @if (status() === 'WAITING_TERMINAL') {
         <div class="terminal-waiting-state">
             <div class="spinner-large"></div>
-            <h3>Esperando al terminal...</h3>
-            <p>Pídele al cliente que acerque su tarjeta o dispositivo al lector de Mercado Pago.</p>
+            <h3>Esperando al terminal {{ authService.paymentDeviceId() }}...</h3>
+            <p>Pídele al cliente que acerque su tarjeta o dispositivo al lector de <strong>{{ configService.activeProviderFullName() }}</strong>.</p>
             <div class="terminal-amount">
                 Monto a procesar: ${{ cardTendered() | number:'1.0-0' }}
             </div>
