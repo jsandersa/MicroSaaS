@@ -8,7 +8,7 @@ namespace MicroSaaS.Application.ElectronicInvoicing.Commands.EmitDte;
 /// Comando CQRS para asignar folio correlativo, firmar y emitir un Documento Tributario Electrónico (DTE)
 /// asociado a una venta del Tenant actual.
 /// </summary>
-[AuthorizeRole("Owner", "Admin")]
+[AuthorizeRole("Owner", "Admin", "Cashier")]
 public sealed record EmitDteCommand(
     Guid SaleId,
     DteType DteType,

@@ -8,7 +8,7 @@ namespace MicroSaaS.Application.Inventory.Commands.RegisterInventoryMovement;
 /// Comando CQRS para registrar un movimiento de inventario (entrada, salida o ajuste),
 /// recalcular el Precio Medio Ponderado (PMP) del producto y generar su asiento inmutable en el Kardex.
 /// </summary>
-[AuthorizeRole("Owner", "Admin")]
+[AuthorizeRole("Owner", "Admin", "Cashier")]
 public sealed record RegisterInventoryMovementCommand(
     Guid ProductId,
     MovementType MovementType,

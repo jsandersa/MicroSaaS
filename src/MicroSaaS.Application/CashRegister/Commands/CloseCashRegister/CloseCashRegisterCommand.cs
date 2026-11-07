@@ -25,7 +25,7 @@ public sealed record CloseCashRegisterResultDto(
 /// <summary>
 /// Comando CQRS para ejecutar el arqueo, cuadratura y cierre de la sesión de caja abierta del operador actual.
 /// </summary>
-[AuthorizeRole("Owner", "Admin")]
+[AuthorizeRole("Owner", "Admin", "Cashier")]
 public sealed record CloseCashRegisterCommand(
     decimal ActualCashAmount,
     decimal ActualCardAmount) : IRequest<CloseCashRegisterResultDto>;

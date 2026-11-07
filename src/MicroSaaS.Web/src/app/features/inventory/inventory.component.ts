@@ -8,10 +8,10 @@ import {
   ReactiveFormsModule,
   Validators
 } from '@angular/forms';
-import { finalize } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
 import { SignalRService } from '../../core/realtime/signalr.service';
 import { ConfigService } from '../../core/services/config.service';
-import { InventoryService } from './inventory.service';
+import { BulkInventoryItemPayload, InventoryService } from './inventory.service';
 import {
   CreateProductCommand,
   KardexMovementDTO,
@@ -50,6 +50,14 @@ type CreateProductFormControls = {
           </button>
           <button
             type="button"
+            class="btn-secondary"
+            style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;"
+            (click)="toggleBulkImport()"
+          >
+            {{ isBulkImportVisible() ? 'Cerrar Carga Masiva' : '📥 Carga Masiva Planilla Excel' }}
+          </button>
+          <button
+            type="button"
             class="btn-primary"
             (click)="toggleForm()"
           >
@@ -70,6 +78,220 @@ type CreateProductFormControls = {
           <span>{{ successMessage() }}</span>
           <button type="button" class="alert-close" (click)="successMessage.set(null)">×</button>
         </div>
+      }
+
+      <!-- Panel de Carga Masiva de Documentos / Inventario Inicial -->
+      @if (isBulkImportVisible()) {
+        <section id="bulk-import-panel" class="form-panel card" style="border-left-color:#16a34a;" aria-label="Carga Masiva de Inventario y Documentos">
+          <div class="form-panel-header">
+            <div>
+              <h2>📥 Carga Masiva de Inventario con Planilla Microsoft Excel (.xlsx)</h2>
+              <p style="margin:0.25rem 0 0;font-size:0.88rem;color:#64748b;">
+                Descarga la planilla oficial en blanco, escribe tus productos en Excel y súbela aquí para crear tu catálogo inicial y asentar existencias en el Libro Kardex.
+              </p>
+            </div>
+            <button type="button" class="btn-icon" (click)="isBulkImportVisible.set(false)" aria-label="Cerrar">✕</button>
+          </div>
+
+          <!-- Paso 1: Acciones rápidas de plantilla Excel y subida de archivo -->
+          <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;padding:0.95rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:1.1rem;">
+            <button
+              type="button"
+              style="background:#16a34a;color:#ffffff;border:none;padding:0.65rem 1.15rem;border-radius:8px;font-weight:700;font-size:0.88rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.45rem;"
+              (click)="downloadExcelTemplate()"
+            >
+              📗 1. Descargar Planilla Excel en Blanco (.xlsx)
+            </button>
+
+            <label
+              for="bulkFilesInput"
+              style="background:#2563eb;color:#ffffff;padding:0.65rem 1.15rem;border-radius:8px;font-weight:700;font-size:0.88rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.45rem;"
+            >
+              📂 2. Subir Planilla Excel Llena (.xlsx)
+            </label>
+            <input
+              id="bulkFilesInput"
+              type="file"
+              accept=".xlsx,.xls,.xml,.csv"
+              multiple
+              style="display:none;"
+              (change)="onBulkFilesSelected($event)"
+            />
+
+            <button
+              type="button"
+              class="btn-secondary"
+              (click)="loadSampleBulkItems()"
+            >
+              ⚡ Cargar Lote Inicial de Ejemplo (8 Productos)
+            </button>
+
+            @if (bulkPreviewItems().length > 0) {
+              <button
+                type="button"
+                class="btn-secondary"
+                (click)="applyMarginToAllBulkItems()"
+              >
+                💰 Recalcular Precios Venta (+{{ defaultMarginPercentage() }}% sobre Costo)
+              </button>
+            }
+          </div>
+
+          <!-- Paso 2: Datos del Documento de Respaldo / Trazabilidad Kardex y F29 -->
+          <div class="form-grid" style="margin-bottom:1rem;">
+            <div class="form-field">
+              <label for="bulkDocRef">Documento de Respaldo / Acta para Libro Kardex *</label>
+              <input
+                id="bulkDocRef"
+                type="text"
+                [formControl]="bulkDocReferenceControl"
+                placeholder="Ej: Acta de Inventario Inicial #01 / Factura Compra N° 1045"
+              />
+            </div>
+
+            <div class="form-field" style="justify-content:center;">
+              <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:1.35rem;font-size:0.88rem;color:#0f172a;">
+                <input
+                  type="checkbox"
+                  [formControl]="bulkRegisterAsPurchaseControl"
+                  style="width:18px;height:18px;cursor:pointer;"
+                />
+                <span>🧾 Registrar también como Factura de Compra afecta a IVA Crédito Fiscal (F29)</span>
+              </label>
+            </div>
+          </div>
+
+          @if (bulkRegisterAsPurchaseControl.value) {
+            <div class="form-grid" style="padding:0.85rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:1rem;">
+              <div class="form-field">
+                <label for="bulkPurchaseFolio">Folio Factura Compra (DTE 33)</label>
+                <input
+                  id="bulkPurchaseFolio"
+                  type="number"
+                  min="1"
+                  [formControl]="bulkPurchaseFolioControl"
+                  placeholder="Ej: 1045"
+                />
+              </div>
+              <div class="form-field">
+                <label for="bulkSupplierRut">RUT Proveedor Emisor</label>
+                <input
+                  id="bulkSupplierRut"
+                  type="text"
+                  [formControl]="bulkSupplierRutControl"
+                  placeholder="Ej: 76.543.210-K"
+                />
+              </div>
+              <div class="form-field">
+                <label for="bulkSupplierName">Razón Social Proveedor</label>
+                <input
+                  id="bulkSupplierName"
+                  type="text"
+                  [formControl]="bulkSupplierNameControl"
+                  placeholder="Ej: Distribuidora Mayorista SpA"
+                />
+              </div>
+            </div>
+          }
+
+          <!-- Paso 3: Guía de llenado de la Planilla Excel o Tabla de Previsualización -->
+          @if (bulkPreviewItems().length === 0) {
+            <div style="padding:1.25rem 1.4rem;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;color:#334155;">
+              <h3 style="margin:0 0 0.65rem;font-size:0.98rem;color:#0f172a;">
+                📋 ¿Cómo llenar la Planilla Excel de Carga Inicial?
+              </h3>
+              <p style="margin:0 0 0.85rem;font-size:0.86rem;color:#475569;">
+                Al descargar el archivo <strong>Plantilla_Carga_Inventario_POS.xlsx</strong>, ábrelo en Microsoft Excel. Encontrarás los títulos listos y las filas en blanco para que ingreses tus productos:
+              </p>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:0.65rem;font-size:0.83rem;">
+                <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:0.65rem;">
+                  <strong style="color:#1d4ed8;display:block;margin-bottom:0.2rem;">1. CODIGO SKU *</strong>
+                  Código único o código de barras del producto (ej: <code>ABAR-001</code>). Si el código ya existe en el sistema, sumará el stock al producto actual.
+                </div>
+                <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:0.65rem;">
+                  <strong style="color:#1d4ed8;display:block;margin-bottom:0.2rem;">2. NOMBRE DEL PRODUCTO *</strong>
+                  Nombre descriptivo como aparecerá en el Punto de Venta (ej: <code>Arroz Grado 1 Bolsa 1Kg</code>).
+                </div>
+                <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:0.65rem;">
+                  <strong style="color:#1d4ed8;display:block;margin-bottom:0.2rem;">3. CANTIDAD INICIAL *</strong>
+                  Número entero de unidades físicas que ingresan a bodega (ej: <code>100</code>).
+                </div>
+                <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:0.65rem;">
+                  <strong style="color:#1d4ed8;display:block;margin-bottom:0.2rem;">4. COSTO UNITARIO NETO *</strong>
+                  Costo de compra sin IVA en pesos (ej: <code>950</code>), utilizado para valorizar tu bodega con <strong>PMP</strong>.
+                </div>
+                <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:0.65rem;">
+                  <strong style="color:#1d4ed8;display:block;margin-bottom:0.2rem;">5. PRECIO VENTA POS (Opcional)</strong>
+                  Precio de venta en caja. <strong>Si lo dejas en blanco</strong>, el sistema calculará el precio automáticamente aplicando tu <strong>+{{ defaultMarginPercentage() }}% de margen</strong>.
+                </div>
+              </div>
+            </div>
+          } @else {
+            <div class="table-responsive" style="max-height:360px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;">
+              <table class="inventory-table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Nombre del Producto</th>
+                    <th class="text-center">Cantidad Ingreso</th>
+                    <th class="text-right">Costo Unit. Neto (CLP)</th>
+                    <th class="text-right">Precio Venta POS (CLP)</th>
+                    <th class="text-right">Subtotal Costo</th>
+                    <th class="text-center">Quitar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of bulkPreviewItems(); track $index) {
+                    <tr>
+                      <td class="sku-cell">{{ row.sku }}</td>
+                      <td class="name-cell">{{ row.name }}</td>
+                      <td class="text-center stock-number">+{{ row.quantity }}</td>
+                      <td class="text-right">\${{ row.unitCost | number: '1.0-0' }}</td>
+                      <td class="text-right price-cell">\${{ row.salePrice | number: '1.0-0' }}</td>
+                      <td class="text-right muted-cell">\${{ (row.quantity * row.unitCost) | number: '1.0-0' }}</td>
+                      <td class="text-center">
+                        <button
+                          type="button"
+                          class="btn-icon"
+                          style="color:#dc2626;font-weight:700;"
+                          (click)="removeBulkPreviewRow($index)"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="form-actions" style="justify-content:space-between;align-items:center;flex-wrap:wrap;">
+              <div style="font-size:0.9rem;color:#334155;">
+                <strong>Resumen del lote:</strong> {{ bulkPreviewItems().length }} SKUs ·
+                <strong>+{{ totalBulkUnits() }} unidades</strong> ·
+                Valorización Neta: <strong>\${{ totalBulkNetValue() | number: '1.0-0' }}</strong>
+              </div>
+              <div style="display:flex;gap:0.75rem;">
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  [disabled]="isSubmitting()"
+                  (click)="bulkPreviewItems.set([])"
+                >
+                  Limpiar Lista
+                </button>
+                <button
+                  type="button"
+                  class="btn-submit"
+                  [disabled]="isSubmitting() || bulkPreviewItems().length === 0"
+                  (click)="submitBulkImport()"
+                >
+                  {{ isSubmitting() ? 'Procesando Carga Masiva...' : '🚀 Confirmar Carga Masiva e Inyectar al Kardex' }}
+                </button>
+              </div>
+            </div>
+          }
+        </section>
       }
 
       <!-- Panel Libro Kardex -->
@@ -792,6 +1014,27 @@ export class InventoryComponent implements OnInit {
   readonly isLoadingKardex = signal<boolean>(false);
   readonly kardexList = signal<KardexMovementDTO[]>([]);
 
+  // Signals y Controles de Carga Masiva de Documentos / Inventario Inicial
+  readonly isBulkImportVisible = signal<boolean>(false);
+  readonly bulkPreviewItems = signal<BulkInventoryItemPayload[]>([]);
+  readonly bulkDocReferenceControl = new FormControl<string>(
+    'Acta de Inventario Inicial #01',
+    { nonNullable: true }
+  );
+  readonly bulkRegisterAsPurchaseControl = new FormControl<boolean>(false, { nonNullable: true });
+  readonly bulkPurchaseFolioControl = new FormControl<number>(1001, { nonNullable: true });
+  readonly bulkSupplierRutControl = new FormControl<string>('76.543.210-K', { nonNullable: true });
+  readonly bulkSupplierNameControl = new FormControl<string>('Distribuidora Mayorista SII SpA', {
+    nonNullable: true
+  });
+
+  readonly totalBulkUnits = computed(() =>
+    this.bulkPreviewItems().reduce((acc, item) => acc + (item.quantity || 0), 0)
+  );
+  readonly totalBulkNetValue = computed(() =>
+    this.bulkPreviewItems().reduce((acc, item) => acc + (item.quantity || 0) * (item.unitCost || 0), 0)
+  );
+
   // Signal computado para conteo de productos en stock crítico
   readonly criticalStockCount = computed(
     () => this.inventoryList().filter((p) => p.currentStock <= p.minimumStock).length
@@ -951,6 +1194,233 @@ export class InventoryComponent implements OnInit {
     if (nextState) {
       this.loadKardex();
     }
+  }
+
+  toggleBulkImport(): void {
+    const nextState = !this.isBulkImportVisible();
+    this.isBulkImportVisible.set(nextState);
+    if (nextState) {
+      this.errorMessage.set(null);
+      setTimeout(() => {
+        document.getElementById('bulk-import-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    }
+  }
+
+  downloadExcelTemplate(): void {
+    this.errorMessage.set(null);
+    this.inventoryService.downloadExcelTemplate().subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'Plantilla_Carga_Inventario_POS.xlsx';
+        anchor.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.errorMessage.set('No se pudo descargar la planilla Excel (.xlsx) desde el servidor.');
+      }
+    });
+  }
+
+  loadSampleBulkItems(): void {
+    const factor = 1 + this.defaultMarginPercentage() / 100;
+    const samples: BulkInventoryItemPayload[] = [
+      { sku: 'ABAR-001', name: 'Arroz Grado 1 Bolsa 1Kg', quantity: 100, unitCost: 950, salePrice: Math.round(950 * factor) },
+      { sku: 'ABAR-002', name: 'Aceite Vegetal Maravilla 1L', quantity: 80, unitCost: 1650, salePrice: Math.round(1650 * factor) },
+      { sku: 'ABAR-003', name: 'Azúcar Blanca Granulada 1Kg', quantity: 120, unitCost: 890, salePrice: Math.round(890 * factor) },
+      { sku: 'ABAR-004', name: 'Harina Sin Polvos de Hornear 1Kg', quantity: 90, unitCost: 820, salePrice: Math.round(820 * factor) },
+      { sku: 'ABAR-005', name: 'Fideos Espagueti N°5 400g', quantity: 150, unitCost: 640, salePrice: Math.round(640 * factor) },
+      { sku: 'LACT-001', name: 'Leche Entera Larga Vida 1L', quantity: 96, unitCost: 880, salePrice: Math.round(880 * factor) },
+      { sku: 'BEB-001', name: 'Agua Mineral Sin Gas 1.5L', quantity: 72, unitCost: 590, salePrice: Math.round(590 * factor) },
+      { sku: 'ASEO-001', name: 'Detergente Líquido Concentrado 3L', quantity: 40, unitCost: 3450, salePrice: Math.round(3450 * factor) }
+    ];
+    this.bulkPreviewItems.set(samples);
+    this.bulkDocReferenceControl.setValue('Acta de Inventario Inicial POS #01');
+  }
+
+  async onBulkFilesSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    this.errorMessage.set(null);
+    const parsedItems: BulkInventoryItemPayload[] = [...this.bulkPreviewItems()];
+    const factor = 1 + this.defaultMarginPercentage() / 100;
+    const fileNames: string[] = [];
+
+    for (let i = 0; i < input.files.length; i++) {
+      const file = input.files[i];
+      fileNames.push(file.name);
+      const lowerName = file.name.toLowerCase();
+
+      if (lowerName.endsWith('.xlsx')) {
+        try {
+          const excelItems = await firstValueFrom(this.inventoryService.parseExcelFile(file));
+          if (excelItems && excelItems.length > 0) {
+            parsedItems.push(...excelItems);
+          }
+        } catch (err: any) {
+          this.errorMessage.set(
+            err?.error?.message || err?.message || `No se pudo leer la planilla Excel "${file.name}".`
+          );
+          input.value = '';
+          return;
+        }
+      } else {
+        const text = await file.text();
+        if (lowerName.endsWith('.xml') || text.trimStart().startsWith('<')) {
+          const xmlItems = this.parseSiiXmlDocument(text, factor);
+          parsedItems.push(...xmlItems);
+        } else {
+          const csvItems = this.parseCsvContent(text, factor);
+          parsedItems.push(...csvItems);
+        }
+      }
+    }
+
+    input.value = '';
+
+    if (parsedItems.length === 0) {
+      this.errorMessage.set('La planilla seleccionada está en blanco o no contiene filas de productos válidas.');
+      return;
+    }
+
+    if (fileNames.length > 0 && this.bulkDocReferenceControl.value === 'Acta de Inventario Inicial #01') {
+      this.bulkDocReferenceControl.setValue(`Carga Planilla Excel (${fileNames.join(', ')})`);
+    }
+
+    this.bulkPreviewItems.set(parsedItems);
+  }
+
+  private parseCsvContent(content: string, marginFactor: number): BulkInventoryItemPayload[] {
+    const lines = content
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const results: BulkInventoryItemPayload[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const separator = line.includes(';') ? ';' : ',';
+      const cols = line.split(separator).map((c) => c.trim().replace(/^"|"$/g, ''));
+
+      if (cols.length < 2) continue;
+
+      // Saltar cabecera si la primera fila contiene 'sku' o 'codigo'
+      if (i === 0 && (cols[0].toLowerCase().includes('sku') || cols[0].toLowerCase().includes('cod'))) {
+        continue;
+      }
+
+      const sku = (cols[0] || `SKU-${i + 1}`).toUpperCase();
+      const name = cols[1] || sku;
+      const quantity = Math.max(0, Math.round(Number((cols[2] || '0').replace(/[^0-9.-]/g, '')) || 0));
+      const unitCost = Math.max(0, Math.round(Number((cols[3] || '0').replace(/[^0-9.-]/g, '')) || 0));
+      const rawSalePrice = Math.round(Number((cols[4] || '0').replace(/[^0-9.-]/g, '')) || 0);
+      const salePrice = rawSalePrice > 0 ? rawSalePrice : Math.max(1, Math.round(unitCost * marginFactor));
+
+      results.push({ sku, name, quantity, unitCost, salePrice });
+    }
+
+    return results;
+  }
+
+  private parseSiiXmlDocument(xmlText: string, marginFactor: number): BulkInventoryItemPayload[] {
+    const results: BulkInventoryItemPayload[] = [];
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, 'application/xml');
+
+      const folioText = doc.querySelector('IdDoc > Folio')?.textContent?.trim();
+      const rutEmisor = doc.querySelector('Emisor > RUTEmisor')?.textContent?.trim();
+      const rznSocEmisor = doc.querySelector('Emisor > RznSoc')?.textContent?.trim();
+
+      if (folioText && Number(folioText) > 0) {
+        this.bulkPurchaseFolioControl.setValue(Number(folioText));
+        this.bulkDocReferenceControl.setValue(`Factura Electrónica SII Folio N° ${folioText}`);
+        this.bulkRegisterAsPurchaseControl.setValue(true);
+      }
+      if (rutEmisor) {
+        this.bulkSupplierRutControl.setValue(rutEmisor);
+      }
+      if (rznSocEmisor) {
+        this.bulkSupplierNameControl.setValue(rznSocEmisor);
+      }
+
+      const detalles = Array.from(doc.querySelectorAll('Detalle'));
+      detalles.forEach((det, idx) => {
+        const vlrCodigo = det.querySelector('VlrCodigo')?.textContent?.trim();
+        const nmbItem = det.querySelector('NmbItem')?.textContent?.trim() || `Producto XML #${idx + 1}`;
+        const qtyText = det.querySelector('QtyItem')?.textContent?.trim() || '1';
+        const prcText = det.querySelector('PrcItem')?.textContent?.trim() || '0';
+
+        const sku = (vlrCodigo || nmbItem.substring(0, 18).replace(/\s+/g, '-')).toUpperCase();
+        const quantity = Math.max(1, Math.round(Number(qtyText) || 1));
+        const unitCost = Math.max(0, Math.round(Number(prcText) || 0));
+        const salePrice = Math.max(1, Math.round(unitCost * marginFactor));
+
+        results.push({
+          sku,
+          name: nmbItem,
+          quantity,
+          unitCost,
+          salePrice
+        });
+      });
+    } catch {
+      // Ignorar XML malformado
+    }
+    return results;
+  }
+
+  applyMarginToAllBulkItems(): void {
+    const factor = 1 + this.defaultMarginPercentage() / 100;
+    this.bulkPreviewItems.update((items) =>
+      items.map((item) => ({
+        ...item,
+        salePrice: item.unitCost > 0 ? Math.round(item.unitCost * factor) : item.salePrice
+      }))
+    );
+  }
+
+  removeBulkPreviewRow(index: number): void {
+    this.bulkPreviewItems.update((items) => items.filter((_, i) => i !== index));
+  }
+
+  submitBulkImport(): void {
+    const items = this.bulkPreviewItems();
+    if (items.length === 0 || this.isSubmitting()) return;
+
+    const docRef = this.bulkDocReferenceControl.value.trim() || 'Acta de Inventario Inicial';
+
+    this.isSubmitting.set(true);
+    this.errorMessage.set(null);
+    this.successMessage.set(null);
+
+    this.inventoryService
+      .bulkImportInventory({
+        documentReference: docRef,
+        registerAsPurchase: this.bulkRegisterAsPurchaseControl.value,
+        purchaseFolio: this.bulkPurchaseFolioControl.value,
+        supplierRut: this.bulkSupplierRutControl.value,
+        supplierName: this.bulkSupplierNameControl.value,
+        items
+      })
+      .pipe(finalize(() => this.isSubmitting.set(false)))
+      .subscribe({
+        next: (res) => {
+          this.successMessage.set(res.message);
+          this.bulkPreviewItems.set([]);
+          this.isBulkImportVisible.set(false);
+          this.loadInventory();
+          this.isKardexVisible.set(true);
+          this.loadKardex();
+        },
+        error: (err: Error) => {
+          this.errorMessage.set(err.message || 'No fue posible completar la carga masiva de inventario.');
+        }
+      });
   }
 
   loadKardex(): void {

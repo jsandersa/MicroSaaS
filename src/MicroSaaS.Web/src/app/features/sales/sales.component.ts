@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { catchError, debounceTime, distinctUntilChanged, finalize, of, startWith, switchMap, tap } from 'rxjs';
 
 import { rutValidator } from '../../shared/validators/rut.validator';
@@ -13,25 +14,32 @@ import {
   SalesService
 } from './sales.service';
 import { SignalRService } from '../../core/realtime/signalr.service';
+import { AuthService } from '../../core/services/auth.service';
 import { CheckoutModalComponent, PaymentDetails } from './checkout-modal.component';
 
 @Component({
   selector: 'app-sales',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, CheckoutModalComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, CheckoutModalComponent],
   templateUrl: './sales.component.html',
   styleUrl: './sales.component.css'
 })
 export class SalesComponent implements OnInit {
+  readonly authService = inject(AuthService);
   private readonly salesService = inject(SalesService);
   private readonly signalRService = inject(SignalRService);
   private readonly destroyRef = inject(DestroyRef);
 
   // Controles reactivos de POS
   readonly searchControl = new FormControl('', { nonNullable: true });
+  readonly selectedDteType = signal<number>(39);
   readonly customerRutControl = new FormControl('', {
     nonNullable: true,
     validators: [rutValidator]
+  });
+  readonly customerNameControl = new FormControl('', { nonNullable: true });
+  readonly creditNoteReasonControl = new FormControl('Devolución de productos / Anulación de venta POS', {
+    nonNullable: true
   });
 
   // Controles reactivos de Apertura y Cierre de Caja
@@ -68,6 +76,7 @@ export class SalesComponent implements OnInit {
   // Signals de Visor de DTEs Emitidos
   readonly showDtesModal = signal<boolean>(false);
   readonly isLoadingDtes = signal<boolean>(false);
+  readonly isEmittingCreditNote = signal<boolean>(false);
   readonly emittedDtes = signal<EmittedDteDto[]>([]);
   readonly selectedDte = signal<EmittedDteDto | null>(null);
 
@@ -122,6 +131,34 @@ export class SalesComponent implements OnInit {
 
   selectDte(dte: EmittedDteDto): void {
     this.selectedDte.set(dte);
+  }
+
+  emitCreditNoteForSelectedDte(): void {
+    const target = this.selectedDte();
+    if (!target || this.isEmittingCreditNote() || target.dteType === 61 || target.status === 5) {
+      return;
+    }
+
+    this.isEmittingCreditNote.set(true);
+    this.errorMessage.set(null);
+
+    const reason = this.creditNoteReasonControl.value.trim() || `Anula DTE Folio N° ${target.folio}`;
+
+    this.salesService
+      .emitCreditNote(target.id, reason)
+      .pipe(finalize(() => this.isEmittingCreditNote.set(false)))
+      .subscribe({
+        next: (res) => {
+          this.successMessage.set(res.message);
+          this.openDtesModal();
+          this.setupProductSearch();
+        },
+        error: (err) => {
+          this.errorMessage.set(
+            err?.error?.message || err?.message || 'No fue posible emitir la Nota de Crédito Electrónica (61).'
+          );
+        }
+      });
   }
 
   closeDtesModal(): void {
@@ -288,6 +325,75 @@ export class SalesComponent implements OnInit {
     return found ? found.quantity : 0;
   }
 
+  onBarcodeScannerEnter(event: Event): void {
+    event.preventDefault();
+    const rawCode = this.searchControl.value.trim();
+    if (!rawCode) return;
+
+    const normalized = rawCode.toLowerCase();
+    const currentList = this.products();
+
+    const exactSkuMatch = currentList.find((p) => p.sku?.toLowerCase() === normalized);
+    const targetProduct = exactSkuMatch ?? (currentList.length === 1 ? currentList[0] : null);
+
+    if (targetProduct) {
+      this.playScannerBeep();
+      this.addToCart(targetProduct);
+      this.searchControl.setValue('');
+      this.successMessage.set(`🔫 Código [${targetProduct.sku}] escaneado: +1 "${targetProduct.name}" agregado al carrito.`);
+      return;
+    }
+
+    this.salesService.searchProducts(rawCode).subscribe((results) => {
+      const match =
+        results.find((p) => p.sku?.toLowerCase() === normalized) ??
+        (results.length === 1 ? results[0] : null);
+
+      if (match) {
+        this.playScannerBeep();
+        this.addToCart(match);
+        this.searchControl.setValue('');
+        this.successMessage.set(`🔫 Código [${match.sku}] escaneado: +1 "${match.name}" agregado al carrito.`);
+      } else {
+        this.errorMessage.set(`No se encontró ningún producto con el código o SKU "${rawCode}".`);
+      }
+    });
+  }
+
+  simulateBarcodeScan(): void {
+    const available = this.products().filter((p) => p.stock > this.getQuantityInCart(p.id));
+    if (available.length === 0) {
+      this.errorMessage.set('No hay productos con stock disponible en pantalla para simular el escaneo.');
+      return;
+    }
+
+    const randomProduct = available[Math.floor(Math.random() * available.length)];
+    this.playScannerBeep();
+    this.addToCart(randomProduct);
+    this.successMessage.set(
+      `🔫 [Simulador Pistola CB] Bip! Código "${randomProduct.sku}" leído → +1 "${randomProduct.name}" al carrito.`
+    );
+  }
+
+  private playScannerBeep(): void {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1350, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.085);
+    } catch {
+      // Ignorar si el navegador bloquea audio
+    }
+  }
+
   addToCart(product: ProductDTO): void {
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -365,12 +471,7 @@ export class SalesComponent implements OnInit {
       return;
     }
 
-    if (this.customerRutControl.value && this.customerRutControl.invalid) {
-      this.customerRutControl.markAsTouched();
-      this.errorMessage.set('El RUT ingresado no es válido. Corrígelo o déjalo en blanco.');
-      return;
-    }
-
+    this.errorMessage.set(null);
     this.showCheckoutModal.set(true);
   }
 
@@ -379,16 +480,22 @@ export class SalesComponent implements OnInit {
     this.errorMessage.set(null);
     this.successMessage.set(null);
 
+    const dteType = payment.dteType || this.selectedDteType();
+    const rutCliente = (payment.customerRut ?? this.customerRutControl.value).trim() || null;
+    const razonSocialCliente =
+      (payment.customerName ?? this.customerNameControl.value).trim() ||
+      (dteType === 33 ? 'Empresa Receptor SII' : 'Cliente POS');
+
     const command = {
       folio: 0,
-      tipoDte: 39,
+      tipoDte: dteType,
       fechaEmision: new Date().toISOString(),
       montoNeto: this.subtotalGeneral(),
       iva: this.totalIva(),
       montoTotal: this.totalFinal(),
 
-      rutCliente: this.customerRutControl.value.trim() || null,
-      razonSocialCliente: null,
+      rutCliente,
+      razonSocialCliente,
 
       paymentMethod: payment.method,
       cashAmount: payment.cashAmount,
@@ -421,11 +528,14 @@ export class SalesComponent implements OnInit {
         next: () => {
           this.clearCart();
           this.customerRutControl.reset('');
+          this.customerNameControl.reset('');
           this.loadCurrentCashSession();
-          this.successMessage.set('¡Venta registrada, stock descontado en Kardex y DTE emitido!');
+          this.successMessage.set(
+            `¡Venta registrada, stock descontado en Kardex y ${dteType === 33 ? 'Factura Electrónica (33)' : 'Boleta Electrónica (39)'} emitida!`
+          );
           setTimeout(() => this.successMessage.set(null), 4000);
         },
-        error: (err) => {
+        error: (err: { error?: { message?: string }; message?: string }) => {
           this.errorMessage.set(
             err?.error?.message || err?.message || 'Ocurrió un error al procesar la venta. Intenta nuevamente.'
           );

@@ -21,6 +21,33 @@ interface RawInventoryItem {
   category?: string;
 }
 
+export interface BulkInventoryItemPayload {
+  sku: string;
+  name: string;
+  quantity: number;
+  unitCost: number;
+  salePrice: number;
+}
+
+export interface BulkInventoryImportPayload {
+  documentReference: string;
+  registerAsPurchase: boolean;
+  purchaseFolio?: number | null;
+  supplierRut?: string | null;
+  supplierName?: string | null;
+  items: BulkInventoryItemPayload[];
+}
+
+export interface BulkInventoryImportResult {
+  createdCount: number;
+  updatedCount: number;
+  totalUnitsAdded: number;
+  totalNetCost: number;
+  documentReference: string;
+  registeredAsPurchase: boolean;
+  message: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -86,5 +113,28 @@ export class InventoryService {
       id,
       ...payload
     });
+  }
+
+  /**
+   * Descarga la planilla oficial de Microsoft Excel (.xlsx) en blanco con los títulos e instrucciones.
+   */
+  downloadExcelTemplate(): Observable<Blob> {
+    return this.api.getBlob('/api/inventory/excel-template');
+  }
+
+  /**
+   * Envía un archivo Excel (.xlsx) al backend para extraer sus filas de productos.
+   */
+  parseExcelFile(file: File): Observable<BulkInventoryItemPayload[]> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.api.post<BulkInventoryItemPayload[]>('/api/inventory/parse-excel', formData);
+  }
+
+  /**
+   * Ejecuta la carga masiva de inventario inicial / documentos de recepción hacia /api/inventory/bulk-import.
+   */
+  bulkImportInventory(payload: BulkInventoryImportPayload): Observable<BulkInventoryImportResult> {
+    return this.api.post<BulkInventoryImportResult>('/api/inventory/bulk-import', payload);
   }
 }

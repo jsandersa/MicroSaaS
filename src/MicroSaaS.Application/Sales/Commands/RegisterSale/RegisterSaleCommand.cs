@@ -21,7 +21,7 @@ public sealed record SaleItemDto(
 /// Comando CQRS para registrar una venta en el POS, validar la sesión de caja abierta,
 /// descontar el inventario en el Kardex y emitir el Documento Tributario Electrónico (DTE).
 /// </summary>
-[AuthorizeRole("Owner", "Admin")]
+[AuthorizeRole("Owner", "Admin", "Cashier")]
 public sealed record RegisterSaleCommand(
     IReadOnlyList<SaleItemDto> Items,
     string? PaymentMethod = "CASH",

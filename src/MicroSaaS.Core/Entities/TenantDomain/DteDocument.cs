@@ -127,5 +127,10 @@ public sealed class DteDocument
 
         Status = DteStatus.Rejected;
     }
+
+    public void MarkAsAnnulledByCreditNote()
+    {
+        Status = DteStatus.Rejected;
+    }
 }
 

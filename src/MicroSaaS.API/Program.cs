@@ -104,15 +104,24 @@ var app = builder.Build();
 // Aplicar migraciones del esquema maestro y ejecutar Data Seeding automáticamente al iniciar el contenedor
 using (var scope = app.Services.CreateScope())
 {
+    var masterDb = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
+
     try
     {
-        var masterDb = scope.ServiceProvider.GetRequiredService<MasterDbContext>();
         await masterDb.Database.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Advertencia al ejecutar MigrateAsync en MasterDbContext; continuando con Data Seeding.");
+    }
+
+    try
+    {
         await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "Ocurrió una advertencia/error durante la migración o Data Seeding inicial, continuando inicio de API.");
+        app.Logger.LogError(ex, "Ocurrió un error durante el Data Seeding inicial, continuando inicio de API.");
     }
 }
 

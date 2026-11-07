@@ -1,6 +1,7 @@
-import { Component, EventEmitter, Input, Output, computed, signal, effect } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, computed, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { rutValidator } from '../../shared/validators/rut.validator';
 
 export type PaymentMethod = 'CASH' | 'CARD' | 'MIXED';
 export type CheckoutStatus = 'IDLE' | 'WAITING_TERMINAL' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
@@ -9,6 +10,9 @@ export interface PaymentDetails {
     method: PaymentMethod;
     cashAmount: number;
     cardAmount: number;
+    dteType: number;
+    customerRut: string;
+    customerName: string;
 }
 
 @Component({
@@ -18,13 +22,22 @@ export interface PaymentDetails {
     templateUrl: './checkout-modal.component.html',
     styleUrls: ['./checkout-modal.component.css']
 })
-export class CheckoutModalComponent {
+export class CheckoutModalComponent implements OnInit {
     @Input({ required: true }) totalAmount!: number;
+    @Input() initialDteType = 39;
+    @Input() initialCustomerRut = '';
+    @Input() initialCustomerName = '';
+
     @Output() confirm = new EventEmitter<PaymentDetails>();
     @Output() cancel = new EventEmitter<void>();
 
-    // Estados Reactivos
+    // Estados Reactivos de Pago y DTE
     readonly selectedMethod = signal<PaymentMethod>('CASH');
+    readonly selectedDteType = signal<number>(39);
+    readonly customerRut = signal<string>('');
+    readonly customerName = signal<string>('');
+    readonly invoiceValidationError = signal<string | null>(null);
+
     readonly status = signal<CheckoutStatus>('IDLE');
     readonly cashTendered = signal<number>(0);
     readonly cardTendered = signal<number>(0);
@@ -40,11 +53,21 @@ export class CheckoutModalComponent {
                 this.cashTendered.set(0);
                 this.cardTendered.set(this.totalAmount);
             } else if (method === 'MIXED') {
-                // En mixto, el cajero digita el efectivo y calculamos el saldo para la tarjeta
                 this.cashTendered.set(0);
                 this.cardTendered.set(this.totalAmount);
             }
         }, { allowSignalWrites: true });
+    }
+
+    ngOnInit(): void {
+        this.selectedDteType.set(this.initialDteType || 39);
+        this.customerRut.set(this.initialCustomerRut || '');
+        this.customerName.set(this.initialCustomerName || '');
+    }
+
+    selectDteType(type: number): void {
+        this.selectedDteType.set(type);
+        this.invoiceValidationError.set(null);
     }
 
     // Cálculos computados
@@ -63,7 +86,6 @@ export class CheckoutModalComponent {
         return (this.cashTendered() + this.cardTendered()) >= this.totalAmount;
     });
 
-    // Manejo dinámico del pago mixto
     onCashTenderedChange(amount: number): void {
         this.cashTendered.set(amount);
         if (this.selectedMethod() === 'MIXED') {
@@ -75,18 +97,45 @@ export class CheckoutModalComponent {
     processPayment(): void {
         if (!this.isPaymentValid()) return;
 
+        this.invoiceValidationError.set(null);
+        const rut = this.customerRut().trim();
+        const name = this.customerName().trim();
+
+        if (this.selectedDteType() === 33) {
+            if (!rut) {
+                this.invoiceValidationError.set('Para emitir Factura Electrónica (33) debes ingresar el RUT de la empresa cliente.');
+                return;
+            }
+            const rutError = rutValidator({ value: rut } as any);
+            if (rutError) {
+                this.invoiceValidationError.set('El RUT ingresado no es válido (Módulo 11). Ejemplo válido: 76.543.210-K o 11.111.111-1.');
+                return;
+            }
+            if (!name) {
+                this.invoiceValidationError.set('Para emitir Factura Electrónica (33) debes ingresar la Razón Social del cliente.');
+                return;
+            }
+        } else if (rut) {
+            const rutError = rutValidator({ value: rut } as any);
+            if (rutError) {
+                this.invoiceValidationError.set('El RUT ingresado no es válido. Corrígelo o déjalo en blanco para Boleta.');
+                return;
+            }
+        }
+
         if (this.selectedMethod() === 'CARD' || this.selectedMethod() === 'MIXED') {
-            // Bloqueamos la interfaz visualmente para esperar el Webhook de Mercado Pago
             this.status.set('WAITING_TERMINAL');
         } else {
             this.status.set('PROCESSING');
         }
 
-        // Emitimos el evento hacia el SalesComponent para que ejecute el backend
         this.confirm.emit({
             method: this.selectedMethod(),
             cashAmount: this.cashTendered(),
-            cardAmount: this.cardTendered()
+            cardAmount: this.cardTendered(),
+            dteType: this.selectedDteType(),
+            customerRut: rut,
+            customerName: name
         });
     }
 

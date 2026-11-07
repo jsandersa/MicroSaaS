@@ -13,6 +13,7 @@ import {
   CertificateStatusDto,
   ConfigService
 } from '../../core/services/config.service';
+import { AuthService, TenantUserDto } from '../../core/services/auth.service';
 
 @Component({
   selector: 'app-settings',
@@ -34,8 +35,10 @@ import {
 export class SettingsComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly configService = inject(ConfigService);
+  private readonly authService = inject(AuthService);
   private readonly snackBar = inject(MatSnackBar);
 
+  readonly activeTab = signal<'empresa' | 'caf' | 'certificado' | 'usuarios'>('empresa');
   readonly isLoading = signal(false);
   readonly isSaving = signal(false);
   readonly statusMessage = signal<string | null>(null);
@@ -62,6 +65,19 @@ export class SettingsComponent implements OnInit {
   readonly isUploadingCertificate = signal(false);
   readonly certificatePasswordControl = this.fb.nonNullable.control('', [Validators.required]);
 
+  // Estado de Gestión de Usuarios y Roles (Administradores, Cajeros y Contadores)
+  readonly tenantUsers = signal<TenantUserDto[]>([]);
+  readonly isLoadingUsers = signal(false);
+  readonly isSavingUser = signal(false);
+  readonly showUserPassword = signal(false);
+  readonly userForm = this.fb.nonNullable.group({
+    role: ['Cashier', [Validators.required]],
+    email: ['', [Validators.required, Validators.email]],
+    password: ['Password123!', [Validators.required, Validators.minLength(6)]],
+    cashRegisterId: ['CAJA-01'],
+    paymentDeviceId: ['MP-POINT-01']
+  });
+
   readonly settingsForm = this.fb.group({
     taxPercentage: this.fb.nonNullable.control(19.0, [Validators.required, Validators.min(0), Validators.max(100)]),
     defaultMarginPercentage: this.fb.nonNullable.control(30.0, [Validators.required, Validators.min(0), Validators.max(500)]),
@@ -78,6 +94,85 @@ export class SettingsComponent implements OnInit {
     this.loadConfiguration();
     this.loadCafAuthorizations();
     this.loadCertificateStatus();
+    this.loadTenantUsers();
+  }
+
+  loadTenantUsers(): void {
+    this.isLoadingUsers.set(true);
+    this.authService.getTenantUsers().subscribe({
+      next: (users) => {
+        this.tenantUsers.set(users ?? []);
+        this.isLoadingUsers.set(false);
+      },
+      error: () => {
+        this.tenantUsers.set([]);
+        this.isLoadingUsers.set(false);
+      }
+    });
+  }
+
+  onSelectUserForEdit(user: TenantUserDto): void {
+    this.userForm.setValue({
+      role: user.role,
+      email: user.email,
+      password: 'Password123!',
+      cashRegisterId: user.cashRegisterId || (user.email.includes('2') ? 'CAJA-02' : 'CAJA-01'),
+      paymentDeviceId: user.paymentDeviceId || (user.email.includes('2') ? 'MP-POINT-02' : 'MP-POINT-01')
+    });
+  }
+
+  onSaveTenantUser(): void {
+    if (this.userForm.invalid || this.isSavingUser()) {
+      return;
+    }
+
+    this.isSavingUser.set(true);
+    const payload = this.userForm.getRawValue();
+    this.authService.upsertTenantUser(payload).subscribe({
+      next: (res) => {
+        this.isSavingUser.set(false);
+        this.snackBar.open(res.message, 'OK', { duration: 4500 });
+        this.userForm.patchValue({ email: '', password: 'Password123!' });
+        this.loadTenantUsers();
+      },
+      error: (err) => {
+        this.isSavingUser.set(false);
+        this.snackBar.open(
+          err?.error?.message || 'No se pudo guardar el usuario.',
+          'Cerrar',
+          { duration: 5000 }
+        );
+      }
+    });
+  }
+
+  onDeleteTenantUser(user: TenantUserDto): void {
+    this.authService.deleteTenantUser(user.id).subscribe({
+      next: (res) => {
+        this.snackBar.open(res.message, 'OK', { duration: 4000 });
+        this.loadTenantUsers();
+      },
+      error: (err) => {
+        this.snackBar.open(
+          err?.error?.message || 'No se pudo eliminar el usuario.',
+          'Cerrar',
+          { duration: 5000 }
+        );
+      }
+    });
+  }
+
+  getRoleLabel(role: string): string {
+    switch (role) {
+      case 'Owner':
+        return '👤 Administrador';
+      case 'Cashier':
+        return '🛒 Cajero POS';
+      case 'Accountant':
+        return '💼 Contador Auditor';
+      default:
+        return role;
+    }
   }
 
   loadConfiguration(): void {

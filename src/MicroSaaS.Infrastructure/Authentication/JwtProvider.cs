@@ -48,6 +48,14 @@ public class JwtProvider : IJwtProvider
             ? minutes
             : 1440;
 
+        var resolvedRole = !string.IsNullOrWhiteSpace(user.Role) ? user.Role : "Owner";
+        var resolvedCashRegisterId = !string.IsNullOrWhiteSpace(user.CashRegisterId)
+            ? user.CashRegisterId
+            : (resolvedRole == "Accountant" ? "" : "CAJA-01");
+        var resolvedPaymentDeviceId = !string.IsNullOrWhiteSpace(user.PaymentDeviceId)
+            ? user.PaymentDeviceId
+            : (resolvedRole == "Accountant" ? "" : "MP-POINT-01");
+
         var claims = new Claim[]
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
@@ -55,8 +63,10 @@ public class JwtProvider : IJwtProvider
             new(TenantIdClaimName, user.TenantId.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(TenantSchemaClaimName, schemaName),
-            new("role", "Owner"),
-            new(ClaimTypes.Role, "Owner")
+            new("role", resolvedRole),
+            new(ClaimTypes.Role, resolvedRole),
+            new("cash_register_id", resolvedCashRegisterId),
+            new("payment_device_id", resolvedPaymentDeviceId)
         };
 
         var signingCredentials = new SigningCredentials(

@@ -55,6 +55,60 @@ export interface EmittedDteDto {
   xmlContent: string;
 }
 
+export interface CreditNoteResultDto {
+  creditNoteId: string;
+  creditNoteFolio: number;
+  annulledDteFolio: number;
+  restoredItemsCount: number;
+  message: string;
+}
+
+export interface DashboardSummaryDto {
+  todaySalesTotal: number;
+  todaySalesCount: number;
+  monthSalesTotal: number;
+  monthSalesNet: number;
+  monthIvaDebito: number;
+  monthSalesCount: number;
+  monthPurchasesTotal: number;
+  monthPurchasesNet: number;
+  monthIvaCredito: number;
+  monthPurchasesCount: number;
+  ivaAPagar: number;
+  remanenteCreditoFiscal: number;
+  monthCogsPmp: number;
+  monthGrossProfit: number;
+  creditNotesCount: number;
+  creditNotesTotal: number;
+  inventoryValorizedPmp: number;
+  inventoryExpectedSaleValue: number;
+  totalProductsCount: number;
+  criticalStockProducts: Array<{
+    id: string;
+    sku: string;
+    name: string;
+    currentStock: number;
+    pmpCost: number;
+  }>;
+  topProducts: Array<{
+    sku: string;
+    name: string;
+    unitsSold: number;
+    revenue: number;
+    costPmp: number;
+    grossProfit: number;
+  }>;
+  cafSummary: Array<{
+    dteType: number;
+    dteTypeName: string;
+    startFolio: number;
+    endFolio: number;
+    currentFolio: number;
+    availableFolios: number;
+    usagePercentage: number;
+  }>;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -109,6 +163,29 @@ export class SalesService {
    */
   getEmittedDtes(): Observable<EmittedDteDto[]> {
     return this.api.get<EmittedDteDto[]>('/api/sales/dtes');
+  }
+
+  /**
+   * Emite una Nota de Crédito Electrónica (DTE 61) anulando el DTE seleccionado y reingresando el stock al Kardex.
+   */
+  emitCreditNote(dteId: string, reason?: string): Observable<CreditNoteResultDto> {
+    return this.api.post<CreditNoteResultDto>(`/api/sales/dtes/${dteId}/credit-note`, {
+      reason: reason || 'Anulación de venta y devolución de mercadería a inventario'
+    });
+  }
+
+  /**
+   * Obtiene el resumen ejecutivo, rentabilidad PMP y pre-balance IVA F29 del Tenant.
+   */
+  getDashboardSummary(): Observable<DashboardSummaryDto> {
+    return this.api.get<DashboardSummaryDto>('/api/sales/dashboard-summary');
+  }
+
+  /**
+   * Descarga el Pack Contable Mensual en formato Microsoft Excel (.xlsx) con 4 hojas (F29, Ventas, Compras y Kardex PMP).
+   */
+  downloadAccountingExcelPack(): Observable<Blob> {
+    return this.api.getBlob('/api/sales/accounting-export-excel');
   }
 
   /**

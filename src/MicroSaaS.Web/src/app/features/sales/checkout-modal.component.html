@@ -2,7 +2,7 @@
     <div class="modal-content card" (click)="$event.stopPropagation()">
 
         <header class="modal-header">
-            <h2>Completar Pago</h2>
+            <h2>Completar Pago y Emisión DTE</h2>
             <button class="btn-icon" (click)="close()" [disabled]="status() !== 'IDLE'">✕</button>
         </header>
 
@@ -10,20 +10,68 @@
         @if (status() === 'IDLE' || status() === 'ERROR') {
         <div class="modal-body">
             <div class="total-display">
-                <span>Total a Cobrar</span>
+                <span>Total a Cobrar (IVA Incluido)</span>
                 <span class="amount-huge">${{ totalAmount | number:'1.0-0' }}</span>
             </div>
 
-            <div class="payment-methods">
-                <button [class.active]="selectedMethod() === 'CASH'" (click)="selectedMethod.set('CASH')">
-                    💵 Efectivo
-                </button>
-                <button [class.active]="selectedMethod() === 'CARD'" (click)="selectedMethod.set('CARD')">
-                    💳 Tarjeta (MP)
-                </button>
-                <button [class.active]="selectedMethod() === 'MIXED'" (click)="selectedMethod.set('MIXED')">
-                    🔀 Mixto
-                </button>
+            <!-- Selector de Documento Tributario SII (Boleta 39 vs Factura 33) -->
+            <div class="dte-selector-box">
+                <label class="section-label">Tipo de Documento Tributario (SII Chile)</label>
+                <div class="dte-type-grid">
+                    <button type="button"
+                        [class.active-dte]="selectedDteType() === 39"
+                        (click)="selectDteType(39)">
+                        🧾 Boleta Electrónica (39)
+                    </button>
+                    <button type="button"
+                        [class.active-dte]="selectedDteType() === 33"
+                        (click)="selectDteType(33)">
+                        🏢 Factura Electrónica (33)
+                    </button>
+                </div>
+
+                @if (selectedDteType() === 33) {
+                <div class="invoice-receptor-box">
+                    <div class="input-group">
+                        <label>RUT Empresa Receptor (Obligatorio Factura) *</label>
+                        <input type="text"
+                            [ngModel]="customerRut()"
+                            (ngModelChange)="customerRut.set($event)"
+                            placeholder="Ej: 76.543.210-K o 11.111.111-1"
+                            class="input-receptor" />
+                    </div>
+                    <div class="input-group">
+                        <label>Razón Social del Cliente (Obligatorio Factura) *</label>
+                        <input type="text"
+                            [ngModel]="customerName()"
+                            (ngModelChange)="customerName.set($event)"
+                            placeholder="Ej: Comercializadora y Servicios SpA"
+                            class="input-receptor" />
+                    </div>
+                </div>
+                }
+
+                @if (invoiceValidationError()) {
+                <div class="invoice-error-banner">
+                    ⚠️ {{ invoiceValidationError() }}
+                </div>
+                }
+            </div>
+
+            <!-- Medio de Pago -->
+            <div>
+                <label class="section-label">Medio de Pago</label>
+                <div class="payment-methods">
+                    <button type="button" [class.active]="selectedMethod() === 'CASH'" (click)="selectedMethod.set('CASH')">
+                        💵 Efectivo
+                    </button>
+                    <button type="button" [class.active]="selectedMethod() === 'CARD'" (click)="selectedMethod.set('CARD')">
+                        💳 Tarjeta (MP)
+                    </button>
+                    <button type="button" [class.active]="selectedMethod() === 'MIXED'" (click)="selectedMethod.set('MIXED')">
+                        🔀 Mixto
+                    </button>
+                </div>
             </div>
 
             <!-- Inputs dinámicos según método -->
@@ -59,9 +107,9 @@
         </div>
 
         <footer class="modal-footer">
-            <button class="btn-secondary" (click)="close()">Cancelar</button>
-            <button class="btn-primary btn-large" [disabled]="!isPaymentValid()" (click)="processPayment()">
-                Confirmar Cobro
+            <button type="button" class="btn-secondary" (click)="close()">Cancelar</button>
+            <button type="button" class="btn-primary btn-large" [disabled]="!isPaymentValid()" (click)="processPayment()">
+                {{ selectedDteType() === 33 ? 'Confirmar y Emitir Factura (33)' : 'Confirmar y Emitir Boleta (39)' }}
             </button>
         </footer>
         }

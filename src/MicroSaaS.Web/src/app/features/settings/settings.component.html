@@ -1,4 +1,52 @@
 <div class="settings-container">
+  <!-- Cabecera y Navegación por Pestañas (Tabs) -->
+  <header class="settings-header">
+    <div>
+      <h1 class="settings-page-title">⚙️ Configuración General y Administración</h1>
+      <p class="settings-page-subtitle">
+        Selecciona un apartado para gestionar parámetros tributarios, folios CAF SII, firma electrónica o cuentas de usuarios
+      </p>
+    </div>
+
+    <nav class="settings-tabs" role="tablist" aria-label="Apartados de Configuración">
+      <button
+        type="button"
+        class="settings-tab-btn"
+        [class.active]="activeTab() === 'empresa'"
+        (click)="activeTab.set('empresa')"
+      >
+        🏢 Parámetros de Empresa
+      </button>
+      <button
+        type="button"
+        class="settings-tab-btn"
+        [class.active]="activeTab() === 'caf'"
+        (click)="activeTab.set('caf')"
+      >
+        📑 Folios CAF (SII)
+        <span class="tab-pill">{{ cafList().length }}</span>
+      </button>
+      <button
+        type="button"
+        class="settings-tab-btn"
+        [class.active]="activeTab() === 'certificado'"
+        (click)="activeTab.set('certificado')"
+      >
+        🔐 Certificado Digital (.pfx)
+      </button>
+      <button
+        type="button"
+        class="settings-tab-btn"
+        [class.active]="activeTab() === 'usuarios'"
+        (click)="activeTab.set('usuarios')"
+      >
+        👥 Usuarios y Roles
+        <span class="tab-pill">{{ tenantUsers().length }}</span>
+      </button>
+    </nav>
+  </header>
+
+  @if (activeTab() === 'empresa') {
   <!-- Sección 1: Configuración Comercial y Tributaria de la Empresa -->
   <mat-card class="settings-card">
     <mat-card-header>
@@ -82,7 +130,9 @@
       </form>
     </mat-card-content>
   </mat-card>
+  }
 
+  @if (activeTab() === 'caf') {
   <!-- Sección 2: Administración de Folios CAF (Código de Autorización de Folios SII) -->
   <mat-card class="settings-card">
     <mat-card-header>
@@ -186,7 +236,9 @@
       </form>
     </mat-card-content>
   </mat-card>
+  }
 
+  @if (activeTab() === 'certificado') {
   <!-- Sección 3: Bóveda de Certificado Digital SII -->
   <mat-card class="settings-card certificate-card">
     <mat-card-header>
@@ -260,4 +312,157 @@
       </div>
     </mat-card-content>
   </mat-card>
+  }
+
+  @if (activeTab() === 'usuarios') {
+  <!-- Sección 4: Administración de Usuarios y Roles (Administradores, Cajeros POS y Contadores) -->
+  <mat-card class="settings-card">
+    <mat-card-header>
+      <mat-icon mat-card-avatar color="primary" class="settings-icon">group</mat-icon>
+      <mat-card-title>👥 Gestión de Usuarios y Roles de la Empresa</mat-card-title>
+      <mat-card-subtitle>
+        Administra las cuentas de acceso para los 3 roles del sistema: Administradores, Cajeros de Punto de Venta (POS) y Contadores Auditores
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <!-- Listado de Usuarios Activos -->
+      <div style="margin:0.75rem 0 1.35rem;">
+        <h4 class="subsection-title" style="margin-bottom:0.65rem;">
+          Usuarios Registrados en la Empresa ({{ tenantUsers().length }})
+        </h4>
+
+        @if (isLoadingUsers()) {
+          <p class="loading-text">Cargando nómina de usuarios...</p>
+        } @else {
+          <div style="display:flex;flex-direction:column;gap:0.55rem;">
+            @for (u of tenantUsers(); track u.id) {
+              <div
+                style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;padding:0.75rem 1rem;border-radius:10px;border:1px solid #e2e8f0;background:#f8fafc;"
+              >
+                <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;">
+                  <span
+                    [style.background]="u.role === 'Owner' ? '#eff6ff' : u.role === 'Cashier' ? '#fef3c7' : '#dcfce7'"
+                    [style.color]="u.role === 'Owner' ? '#1d4ed8' : u.role === 'Cashier' ? '#92400e' : '#166534'"
+                    [style.border]="u.role === 'Owner' ? '1px solid #bfdbfe' : u.role === 'Cashier' ? '1px solid #fcd34d' : '1px solid #86efac'"
+                    style="padding:0.25rem 0.65rem;border-radius:9999px;font-size:0.76rem;font-weight:700;"
+                  >
+                    {{ getRoleLabel(u.role) }}
+                  </span>
+                  <strong style="font-size:0.92rem;color:#0f172a;">{{ u.email }}</strong>
+                  @if (u.role !== 'Accountant') {
+                    <span style="background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;padding:0.2rem 0.55rem;border-radius:9999px;font-size:0.74rem;font-weight:700;">
+                      🖥️ Caja: {{ u.cashRegisterId || (u.email.includes('2') ? 'CAJA-02' : 'CAJA-01') }}
+                    </span>
+                    <span style="background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;padding:0.2rem 0.55rem;border-radius:9999px;font-size:0.74rem;font-weight:700;">
+                      💳 MP: {{ u.paymentDeviceId || (u.email.includes('2') ? 'MP-POINT-02' : 'MP-POINT-01') }}
+                    </span>
+                  }
+                </div>
+
+                <div style="display:flex;gap:0.5rem;">
+                  <button
+                    type="button"
+                    (click)="onSelectUserForEdit(u)"
+                    style="background:#ffffff;color:#1e293b;border:1px solid #cbd5e1;padding:0.35rem 0.7rem;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;"
+                  >
+                    ✏️ Editar / Cambiar Clave
+                  </button>
+                  <button
+                    type="button"
+                    (click)="onDeleteTenantUser(u)"
+                    style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:0.35rem 0.7rem;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;"
+                  >
+                    🗑️ Eliminar
+                  </button>
+                </div>
+              </div>
+            } @empty {
+              <div class="caf-empty-banner">
+                No se encontraron usuarios registrados.
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Formulario para Crear o Actualizar Usuario -->
+      <form [formGroup]="userForm" (ngSubmit)="onSaveTenantUser()" class="caf-form">
+        <h4 class="subsection-title">Agregar Nuevo Usuario o Actualizar Contraseña / Rol</h4>
+
+        <div class="form-grid" style="margin-top:0.75rem;">
+          <mat-form-field appearance="outline">
+            <mat-label>Rol del Usuario en el Sistema</mat-label>
+            <mat-select formControlName="role">
+              <mat-option value="Cashier">🛒 Cajero POS (Solo Punto de Venta y Caja)</mat-option>
+              <mat-option value="Accountant">💼 Contador Auditor (Portal F29 y Libros Excel)</mat-option>
+              <mat-option value="Owner">👤 Administrador (Control Total de la Empresa)</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Correo Electrónico Corporativo</mat-label>
+            <input
+              matInput
+              type="email"
+              formControlName="email"
+              placeholder="Ej: cajero2@comercializadora.cl"
+            />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Contraseña de Acceso</mat-label>
+            <input
+              matInput
+              [type]="showUserPassword() ? 'text' : 'password'"
+              formControlName="password"
+              placeholder="Mínimo 6 caracteres"
+            />
+            <button
+              type="button"
+              matSuffix
+              (click)="showUserPassword.set(!showUserPassword())"
+              style="background:transparent;border:none;cursor:pointer;padding:0 0.6rem;font-size:0.78rem;color:#475569;font-weight:600;"
+            >
+              {{ showUserPassword() ? '🙈 Ocultar' : '👁️ Ver' }}
+            </button>
+          </mat-form-field>
+
+          @if (userForm.controls.role.value !== 'Accountant') {
+            <mat-form-field appearance="outline">
+              <mat-label>🖥️ ID de Caja Asignada</mat-label>
+              <input
+                matInput
+                type="text"
+                formControlName="cashRegisterId"
+                placeholder="Ej: CAJA-01 o CAJA-02"
+              />
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>💳 ID Máquina de Pago Asociada (MP)</mat-label>
+              <input
+                matInput
+                type="text"
+                formControlName="paymentDeviceId"
+                placeholder="Ej: MP-POINT-01 o PAX-A910-02"
+              />
+            </mat-form-field>
+          }
+        </div>
+
+        <div class="actions-row">
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            [disabled]="userForm.invalid || isSavingUser()"
+          >
+            {{ isSavingUser() ? 'Guardando usuario...' : '+ Guardar / Habilitar Usuario' }}
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+  }
 </div>

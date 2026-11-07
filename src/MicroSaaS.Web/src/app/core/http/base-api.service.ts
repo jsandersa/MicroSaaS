@@ -25,6 +25,11 @@ export class BaseApiService {
     return this.http.get<T>(url, { params });
   }
 
+  public getBlob(endpoint: string): Observable<Blob> {
+    const url = this.buildUrl(endpoint);
+    return this.http.get(url, { responseType: 'blob' });
+  }
+
   /**
    * Despacha un comando (Command CQRS) mediante HTTP POST hacia el endpoint especificado.
    */

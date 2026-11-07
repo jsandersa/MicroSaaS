@@ -1,8 +1,11 @@
+using System.Security.Cryptography;
+using System.Text;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MicroSaaS.Application.Tenants.Commands.RegisterTenant;
+using MicroSaaS.Core.Entities;
 using MicroSaaS.Core.Entities.TenantDomain;
 using MicroSaaS.Core.Interfaces;
 using MicroSaaS.Infrastructure.Persistence;
@@ -26,6 +29,16 @@ public static class DatabaseSeeder
         var tenantProvider = serviceProvider.GetRequiredService<ITenantProvider>();
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
         var logger = loggerFactory.CreateLogger(nameof(DatabaseSeeder));
+
+        await masterDb.Database.ExecuteSqlRawAsync(
+            """
+            ALTER TABLE public."Users" ADD COLUMN IF NOT EXISTS "Role" character varying(50) NOT NULL DEFAULT 'Owner';
+            ALTER TABLE public."Users" ADD COLUMN IF NOT EXISTS "CashRegisterId" character varying(50) NULL;
+            ALTER TABLE public."Users" ADD COLUMN IF NOT EXISTS "PaymentDeviceId" character varying(80) NULL;
+            UPDATE public."Users" SET "CashRegisterId" = 'CAJA-01' WHERE "CashRegisterId" IS NULL AND "Role" <> 'Accountant';
+            UPDATE public."Users" SET "PaymentDeviceId" = 'MP-POINT-01' WHERE "PaymentDeviceId" IS NULL AND "Role" <> 'Accountant';
+            """,
+            cancellationToken);
 
         if (!await masterDb.Tenants.AnyAsync(cancellationToken))
         {
@@ -60,7 +73,6 @@ public static class DatabaseSeeder
             logger.LogInformation(
                 "Data Seeding completado exitosamente. TenantId: {TenantId}, Esquema: 't_77654321k', Usuario: 'admin@comercializadora.cl'.",
                 tenantId);
-            return;
         }
 
         // Si ya existen Tenants en la BD local, asegurar que cada esquema existente cuente con la tabla Configurations y su registro por defecto
@@ -77,6 +89,38 @@ public static class DatabaseSeeder
                 tenant.Id,
                 logger,
                 cancellationToken);
+        }
+
+        var defaultTenant = tenants.FirstOrDefault(t => t.SchemaName == "t_77654321k") ?? tenants.FirstOrDefault();
+        if (defaultTenant is not null)
+        {
+            var passwordHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("Password123!")));
+
+            if (!await masterDb.Users.AnyAsync(u => u.Email == "cajero@comercializadora.cl", cancellationToken))
+            {
+                var cashierUser = User.Create(
+                    tenantId: defaultTenant.Id,
+                    email: "cajero@comercializadora.cl",
+                    passwordHash: passwordHash,
+                    role: "Cashier");
+
+                await masterDb.Users.AddAsync(cashierUser, cancellationToken);
+                await masterDb.SaveChangesAsync(cancellationToken);
+                logger.LogInformation("Usuario Cajero sembrado exitosamente: 'cajero@comercializadora.cl' (Password123!).");
+            }
+
+            if (!await masterDb.Users.AnyAsync(u => u.Email == "contador@comercializadora.cl", cancellationToken))
+            {
+                var accountantUser = User.Create(
+                    tenantId: defaultTenant.Id,
+                    email: "contador@comercializadora.cl",
+                    passwordHash: passwordHash,
+                    role: "Accountant");
+
+                await masterDb.Users.AddAsync(accountantUser, cancellationToken);
+                await masterDb.SaveChangesAsync(cancellationToken);
+                logger.LogInformation("Usuario Contador sembrado exitosamente: 'contador@comercializadora.cl' (Password123!).");
+            }
         }
 
         tenantProvider.SetCurrentTenantId(null);
@@ -291,6 +335,19 @@ public static class DatabaseSeeder
                 NOW() + INTERVAL '6 months',
                 true
             WHERE NOT EXISTS (SELECT 1 FROM "{schemaName}"."CafAuthorizations" WHERE "DteType" = 33 AND "IsActive" = true);
+            INSERT INTO "{schemaName}"."CafAuthorizations" ("Id", "TenantId", "DteType", "StartFolio", "EndFolio", "CurrentFolio", "XmlContent", "AuthorizedAt", "ExpiresAt", "IsActive")
+            SELECT
+                gen_random_uuid(),
+                '{tenantId}',
+                61,
+                1,
+                100,
+                COALESCE((SELECT MAX("Folio") FROM "{schemaName}"."DteDocuments" WHERE "DteType" = 61), 0),
+                '<CAF version="1.0"><DA><TD>61</TD><RNG><D>1</D><H>100</H></RNG></DA></CAF>',
+                NOW() - INTERVAL '15 days',
+                NOW() + INTERVAL '6 months',
+                true
+            WHERE NOT EXISTS (SELECT 1 FROM "{schemaName}"."CafAuthorizations" WHERE "DteType" = 61 AND "IsActive" = true);
             """;
 
         await tenantDb.Database.ExecuteSqlRawAsync(ensureTableSql, cancellationToken);
